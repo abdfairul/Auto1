@@ -1,0 +1,20 @@
+<PROFILE>
+  <GRID>
+    
+  </GRID>
+  
+  <OCR>
+    <TV>
+	  <NAME>SANYO_55W</NAME>
+	  <SOURCE>10;10;10;10</SOURCE>
+	  <INFO>10;10;10;10</INFO>
+	  <LABEL>10;10;10;10</LABEL>
+	</TV>
+    <TV>
+	  <NAME>PHILIPS_55W</NAME>
+	  <SOURCE>20;50;10;10</SOURCE>
+	  <INFO>10;10;10;10</INFO>
+	  <LABEL>10;10;10;10</LABEL>
+	</TV>
+  </OCR>
+</PROFILE>

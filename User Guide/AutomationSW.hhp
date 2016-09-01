@@ -1,0 +1,11 @@
+[OPTIONS]
+Compatibility=1.1 or later
+Compiled file=AutomationSW.chm
+Contents file=About.hhc
+Display compile progress=No
+Index file=Index.hhk
+Language=0x809 English (United Kingdom)
+
+
+[INFOTYPES]
+
