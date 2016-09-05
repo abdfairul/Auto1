@@ -25,9 +25,25 @@ namespace Test
 {
     public class QuantumAllFormat:IPlugin
     {
+
+        #region Member: IR
+        private ComboBox cbRCFormatList;
+        private ComboBox cbRCKeyList;
+        private string IrFormat;
+        private string IrKey;
+        private Panel panelRCFormat;
+        private Button btRCKeyTransmit;
+        private EnumListUser.IR_RC_FORMAT m_formatRC;
+        #endregion
+
+
+        private TextBox tbWeatherSpoon;
+
+
         #region Member: Extra
         private TextBox tbTester;
         private TextBox tbVer;
+        private TextBox PictureDir;
         #endregion
 
         IplImage imgOri, imgPreProcess;
@@ -63,11 +79,9 @@ namespace Test
         private AfterExecute AfterFlag;
         private CellClickEvent ClickEventFlag;
 
-        private RibbonComboBox cameraList; 
-        private RibbonComboBox cameraResolution;
-        private RibbonComboBox microfon;
+
         private PictureBox pictureBox;
-        private PictureBox pctCvWindow;
+
         private PictureBox pictureBoxPopup;
         private ComboBox cbCamList;
         private int cbCamListIndex;
@@ -86,13 +100,12 @@ namespace Test
         private Button buttonTestEquipment;
         private ProgressBar progressBar;
         private Int32 inProgress;
-        private Label QD882Label;
-        private Label UARTLabel;
-        private Label RemoteIRLabel;
+        private TextBox QD882Label;
+        private TextBox UARTLabel;
+        private TextBox RemoteIRLabel;
         private Button buttonResetEquipment;
         private Button buttonCheckEquipment;
-        private Button buttonUARTWeatherSpooning;
-        private Button buttonIRSend;
+
 
         private RibbonHost signalTypeHost;
         private ToolTip toolTipInfo;
@@ -329,7 +342,7 @@ namespace Test
                     {
                         for (int irsend = 0; irsend < 2; irsend++) // to check the TV not freezed
                         {
-                            mysaal.IRTRANS_SendCMD("PHILIPS_RC5", "MENU");//MENU //FORMAT //SOURCE //INFO
+                            sendIRTrans("MENU");
                             Thread.Sleep(2000);// enough time to see the picture changing
                                                // save the bitmap?
                             SavePictureForReference(currentSourceFormat,"Menu");
@@ -396,14 +409,14 @@ namespace Test
                         {
                             //2) The image is normally displayed.
 
-                            mysaal.IRTRANS_SendCMD("PHILIPS_RC5", "FORMAT");//MENU //FORMAT //SOURCE //INFO
+                            sendIRTrans("FORMAT");
                             Thread.Sleep(1000);// need send twice to change. first click only to appear menu second send to change item
 
-                            mysaal.IRTRANS_SendCMD("PHILIPS_RC5", "FORMAT");//MENU //FORMAT //SOURCE //INFO
+                            sendIRTrans("FORMAT");
                             Thread.Sleep(2000);// enough time to see the picture changing
                                                // save teh bitmap?
                             SavePictureForReference(currentSourceFormat, "Picture_Format");
-                            mysaal.IRTRANS_SendCMD("PHILIPS_RC5", "BACK");
+                            sendIRTrans("BACK");
                             Thread.Sleep(2000);
 
 
@@ -436,11 +449,11 @@ namespace Test
                             {
                                 //3) Confirm the all picture format is same as Picture Format Info 
 
-                                mysaal.IRTRANS_SendCMD("PHILIPS_RC5", "INFO");//MENU //FORMAT //SOURCE //INFO
+                                sendIRTrans("INFO");
                                 Thread.Sleep(2000);// enough time to see the picture changing
                                                    // save teh bitmap?
                                 SavePictureForReference(currentSourceFormat, "Picture_Format_info");
-                                mysaal.IRTRANS_SendCMD("PHILIPS_RC5", "BACK");
+                                sendIRTrans("BACK");
                                 Thread.Sleep(2000);
 
                                 Result = EnumListUser.ResultQuantumDataTest.PEND;
@@ -512,7 +525,10 @@ namespace Test
         public QuantumAllFormat()
         {
            // EquipmentInit();
-            PopulateUI();
+            PopulateUI_Device();
+            PopulateUI_QuantumData();
+            //PopulateUI_DebugMsg();
+            PopulateUI_IR();
             PopulateUI_Camera();
             PopulateUI_Extra();
 
@@ -550,8 +566,6 @@ namespace Test
                 listBoxSignalType.Enabled = false;
                 listBoxSignalFormat.Enabled = false;
                 listBoxSignalPattern.Enabled = false;
-
-                //buttonUARTWeatherSpooning.Visible = false;
 
                 QD882Label.BackColor = System.Drawing.SystemColors.Control;
                 QD882Label.Text = "QD";
@@ -749,6 +763,9 @@ namespace Test
             {
                 RemoteIRLabel.BackColor = Color.Lime;
                 RemoteIRLabel.Text = "Remote OK";
+
+                panelRCFormat.Enabled = true;
+                btRCKeyTransmit.Enabled = true;
             }
             else
             {
@@ -840,9 +857,7 @@ namespace Test
                     ErrorInfoForPattern.Clear();
                     checkCurrentSetting();
                 }
-            }
-            if (select == "Weatherspoon")
-            {
+
                 if (connectedUART == null)
                 {
                     MessageBox.Show("Please check the UART connection");
@@ -852,19 +867,7 @@ namespace Test
                     mysaal.UART_SendCmd("WEATHER_SPOON 1");
                 }
             }
-
-            if (select == "IRSend")
-            {
-                if (IR_RemoteConnected == null)
-                {
-                    MessageBox.Show("Please check the IR remote connection");
-                }
-                else
-                {
-                    mysaal.IRTRANS_SendCMD("PHILIPS_RC5", "MENU");//MENU //FORMAT //SOURCE //INFO
-                }
-            }
-            
+     
         }
 
         private void ribbonButton_click(object sender, EventArgs e)
@@ -1224,129 +1227,134 @@ namespace Test
             storage.Clear();
         }
 
-        private void PopulateUI()
+        private void PopulateUI_Device()
         {
             // UI creation on the fly
             ribbonEquipmentSetting = new RibbonTab();
             ribbonEquipmentSetting.Text = "Equipment Setting";
 
-
-            ConnectionToolsHost = new RibbonHost();
-            ConnectionCheckTools = new Panel();
-            ConnectionCheckTools.Size = new System.Drawing.Size(300, 68);//155
             buttonTestEquipment = new Button();
             progressBar = new ProgressBar();
-            QD882Label = new Label();
-            UARTLabel = new Label();
-            RemoteIRLabel = new Label();
+
+            ConnectionCheckTools = new Panel();
+
+            
+
+            Panel pnlEquipment = new Panel();
+            pnlEquipment.AutoScroll = true;
+
+            QD882Label = new TextBox();
+            UARTLabel = new TextBox();
+            RemoteIRLabel = new TextBox();
             buttonResetEquipment = new Button();
             buttonCheckEquipment = new Button();
-            buttonUARTWeatherSpooning = new Button();
-            buttonIRSend = new Button();
 
-            buttonTestEquipment.Location = new System.Drawing.Point(6, 6);
-            buttonTestEquipment.Name = "Test";
-            buttonTestEquipment.Size = new System.Drawing.Size(45, 60);
-            buttonTestEquipment.TabIndex = 0;
-            buttonTestEquipment.Text = "Test";
-            buttonTestEquipment.UseVisualStyleBackColor = true;
-            buttonTestEquipment.Click += new System.EventHandler(this.ribbonButtonConnectionTest_click);
+            QD882Label.ReadOnly = true;
+            UARTLabel.ReadOnly = true;
+            RemoteIRLabel.ReadOnly = true;
 
-            buttonResetEquipment.Location = new System.Drawing.Point(150, 6);
-            buttonResetEquipment.Name = "Reset";
-            buttonResetEquipment.Size = new System.Drawing.Size(45, 20);
-            buttonResetEquipment.TabIndex = 0;
-            buttonResetEquipment.Text = "Reset";
-            buttonResetEquipment.UseVisualStyleBackColor = true;
-            buttonResetEquipment.Click += new System.EventHandler(this.ribbonButtonConnectionTest_click);
+            ConnectionCheckTools.Size = new Size(180, 55);
+            buttonTestEquipment.Size = new System.Drawing.Size(50, 55);
+            pnlEquipment.Size = new Size(ConnectionCheckTools.Size.Width-buttonTestEquipment.Size.Width, 55);
+            progressBar.Size  = new Size(pnlEquipment.Size.Width, pnlEquipment.Size.Height);
 
-            buttonCheckEquipment.Location = new System.Drawing.Point(200, 6);
-            buttonCheckEquipment.Name = "Check";
-            buttonCheckEquipment.Size = new System.Drawing.Size(48, 20);
-            buttonCheckEquipment.TabIndex = 0;
-            buttonCheckEquipment.Text = "Check";
-            buttonCheckEquipment.UseVisualStyleBackColor = true;
-            buttonCheckEquipment.Click += new System.EventHandler(this.ribbonButtonConnectionTest_click);
+            pnlEquipment.Controls.Add(QD882Label);
+            pnlEquipment.Controls.Add(buttonResetEquipment);
+            pnlEquipment.Controls.Add(buttonCheckEquipment);
+            pnlEquipment.Controls.Add(UARTLabel);
+            pnlEquipment.Controls.Add(RemoteIRLabel);
 
+            QD882Label.Size = new Size(pnlEquipment.Size.Width - 20, 10);
+            buttonResetEquipment.Size = new Size(QD882Label.Size.Width / 2, QD882Label.Size.Height);
+            buttonCheckEquipment.Size = new Size(QD882Label.Size.Width / 2, QD882Label.Size.Height);
+            UARTLabel.Size = new Size(QD882Label.Size.Width, QD882Label.Size.Height);
+            RemoteIRLabel.Size = new Size(QD882Label.Size.Width, QD882Label.Size.Height);
 
-            buttonUARTWeatherSpooning.Location = new System.Drawing.Point(150, 30);
-            buttonUARTWeatherSpooning.Name = "Weatherspoon";
-            buttonUARTWeatherSpooning.Size = new System.Drawing.Size(120, 20);
-            buttonUARTWeatherSpooning.TabIndex = 0;
-            buttonUARTWeatherSpooning.Text = "Weatherspoon";
-            buttonUARTWeatherSpooning.UseVisualStyleBackColor = true;
-            buttonUARTWeatherSpooning.Click += new System.EventHandler(this.ribbonButtonConnectionTest_click);
-            buttonUARTWeatherSpooning.Visible = true;
+            QD882Label.Location = new Point(0, 0);
+            buttonResetEquipment.Location = new Point(QD882Label.Location.X, QD882Label.Location.Y + QD882Label.Size.Height);
+            buttonCheckEquipment.Location = new Point(QD882Label.Location.X + buttonResetEquipment.Size.Width, QD882Label.Location.Y + QD882Label.Size.Height);
+            UARTLabel.Location = new Point(buttonResetEquipment.Location.X, buttonResetEquipment.Location.Y + QD882Label.Size.Height);
+            RemoteIRLabel.Location = new Point(UARTLabel.Location.X, UARTLabel.Location.Y + UARTLabel.Size.Height);
 
-            buttonIRSend.Location = new System.Drawing.Point(150, 50);
-            buttonIRSend.Name = "IRSend";
-            buttonIRSend.Size = new System.Drawing.Size(60, 20);
-            buttonIRSend.TabIndex = 0;
-            buttonIRSend.Text = "IRSend";
-            buttonIRSend.UseVisualStyleBackColor = true;
-            buttonIRSend.Click += new System.EventHandler(this.ribbonButtonConnectionTest_click);
-            buttonIRSend.Visible = true;
+            
 
 
-            progressBar.Location = new System.Drawing.Point(50, 6);
-            progressBar.Name = "progressBar";
-            progressBar.Size = new System.Drawing.Size(100, 60);
-            progressBar.TabIndex = 1;
-            progressBar.Step = 1;
-            progressBar.Visible = false;
-
-            QD882Label.AutoSize = true;     
-            QD882Label.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            QD882Label.Location = new System.Drawing.Point(50, 6);
-            QD882Label.Name = "label1";
-            QD882Label.Size = new System.Drawing.Size(146, 31);
+            //QD882Label.AutoSize = true;
+            QD882Label.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));   
+            QD882Label.Name = "label1";       
             QD882Label.TabIndex = 2;
             QD882Label.BackColor = System.Drawing.SystemColors.Control;
             QD882Label.Text = "QD";
 
+            buttonResetEquipment.FlatStyle = FlatStyle.Popup;
+            buttonResetEquipment.BackColor = Color.LightBlue;
+            buttonResetEquipment.Name = "Reset"; 
+            buttonResetEquipment.TabIndex = 0;
+            buttonResetEquipment.Text = "Reset";
+            buttonResetEquipment.Click += new System.EventHandler(this.ribbonButtonConnectionTest_click);
 
-            UARTLabel.AutoSize = true;
+            buttonCheckEquipment.FlatStyle = FlatStyle.Popup;
+            buttonCheckEquipment.BackColor = Color.LightBlue;
+            buttonCheckEquipment.Name = "Check";
+            buttonCheckEquipment.TabIndex = 0;
+            buttonCheckEquipment.Text = "Check";
+            buttonCheckEquipment.Click += new System.EventHandler(this.ribbonButtonConnectionTest_click);
+
+  
+            //UARTLabel.AutoSize = true;
             UARTLabel.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            UARTLabel.Location = new System.Drawing.Point(50, 38);
             UARTLabel.Name = "label1";
-            UARTLabel.Size = new System.Drawing.Size(146, 31);
             UARTLabel.TabIndex = 2;
             UARTLabel.BackColor = System.Drawing.SystemColors.Control;
             UARTLabel.Text = "UART";
 
-            RemoteIRLabel.AutoSize = true;
+            //RemoteIRLabel.AutoSize = true;
             RemoteIRLabel.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            RemoteIRLabel.Location = new System.Drawing.Point(50, 52);
             RemoteIRLabel.Name = "label1";
-            RemoteIRLabel.Size = new System.Drawing.Size(146, 31);
             RemoteIRLabel.TabIndex = 2;
             RemoteIRLabel.BackColor = System.Drawing.SystemColors.Control;
             RemoteIRLabel.Text = "";
 
+            ConnectionToolsHost = new RibbonHost();
+            
+            buttonTestEquipment.FlatStyle = FlatStyle.Popup;
+            buttonTestEquipment.BackColor = Color.LightBlue;
+            buttonTestEquipment.UseVisualStyleBackColor = true;
+            buttonTestEquipment.Name = "Test";           
+            buttonTestEquipment.TabIndex = 0;
+            buttonTestEquipment.Text = "Test";  
+            buttonTestEquipment.Click += new System.EventHandler(this.ribbonButtonConnectionTest_click);
+
+            buttonTestEquipment.Location = new Point(0, 0);
+            pnlEquipment.Location = new Point(buttonTestEquipment.Location.X + buttonTestEquipment.Size.Width, buttonTestEquipment.Location.Y);
+            progressBar.Location  = new Point(buttonTestEquipment.Location.X + buttonTestEquipment.Size.Width, buttonTestEquipment.Location.Y);
+
+            progressBar.Name = "progressBar";   
+            progressBar.TabIndex = 1;
+            progressBar.Step = 1;
+            progressBar.Visible = false;
+
             ConnectionCheckTools.Controls.Add(buttonTestEquipment);
             ConnectionCheckTools.Controls.Add(progressBar);
-            ConnectionCheckTools.Controls.Add(QD882Label);
-            ConnectionCheckTools.Controls.Add(UARTLabel);
-            ConnectionCheckTools.Controls.Add(RemoteIRLabel);
-            ConnectionCheckTools.Controls.Add(buttonResetEquipment);
-            ConnectionCheckTools.Controls.Add(buttonCheckEquipment);
-            ConnectionCheckTools.Controls.Add(buttonUARTWeatherSpooning);
-            ConnectionCheckTools.Controls.Add(buttonIRSend);
+            ConnectionCheckTools.Controls.Add(pnlEquipment);
 
             RibbonPanel connectionTest = new RibbonPanel();
             connectionTest.Text = "Connection Test";
             connectionTest.Items.Add(ConnectionToolsHost);
             ConnectionToolsHost.HostedControl = ConnectionCheckTools;
 
+            ribbonEquipmentSetting.Panels.Add(connectionTest);
+        }
 
-
+        private void PopulateUI_QuantumData()
+        {
             signalTypeHost = new RibbonHost();
-            toolTipInfo = new System.Windows.Forms.ToolTip(); 
+            toolTipInfo = new System.Windows.Forms.ToolTip();
             listBoxSignalType = new ListBox();
             listBoxSignalType.FormattingEnabled = true;
             listBoxSignalType.Location = new System.Drawing.Point(0, 0);
             listBoxSignalType.Name = "listBoxSignalType";
-            listBoxSignalType.Size = new System.Drawing.Size(80, 43);
+            listBoxSignalType.Size = new System.Drawing.Size(60, 43);
             listBoxSignalType.TabIndex = 3;
             listBoxSignalType.KeyPress += new KeyPressEventHandler(this.listBoxSignalTypeKeys_Enter);
             listBoxSignalType.DoubleClick += new EventHandler(this.listBoxSignalType_click);
@@ -1357,7 +1365,7 @@ namespace Test
             listBoxSignalFormat.FormattingEnabled = true;
             listBoxSignalFormat.Location = new System.Drawing.Point(0, 0);
             listBoxSignalFormat.Name = "listBoxSignalFormat";
-            listBoxSignalFormat.Size = new System.Drawing.Size(120, 43);
+            listBoxSignalFormat.Size = new System.Drawing.Size(80, 43);
             listBoxSignalFormat.TabIndex = 3;
             listBoxSignalFormat.KeyPress += new KeyPressEventHandler(this.listBoxSignalFormat_Enter);
             listBoxSignalFormat.DoubleClick += new EventHandler(this.listBoxSignalFormat_click);
@@ -1369,7 +1377,7 @@ namespace Test
             listBoxSignalPattern.FormattingEnabled = true;
             listBoxSignalPattern.Location = new System.Drawing.Point(0, 0);
             listBoxSignalPattern.Name = "listBoxSignalPattern";
-            listBoxSignalPattern.Size = new System.Drawing.Size(120, 43);
+            listBoxSignalPattern.Size = new System.Drawing.Size(80, 43);
             listBoxSignalPattern.TabIndex = 3;
             listBoxSignalPattern.KeyPress += new KeyPressEventHandler(this.listBoxSignalPattern_Enter);
             listBoxSignalPattern.DoubleClick += new EventHandler(this.listBoxSignalPattern_click);
@@ -1377,7 +1385,7 @@ namespace Test
 
 
             RibbonPanel signalType = new RibbonPanel();
-            signalType.Text = "Signal Type";
+            signalType.Text = "Interface";
 
             signalType.Items.Add(signalTypeHost);
             signalTypeHost.HostedControl = listBoxSignalType;
@@ -1390,7 +1398,7 @@ namespace Test
             }
 
             RibbonPanel tvformat = new RibbonPanel();
-            tvformat.Text = "TV Format";
+            tvformat.Text = "Source";
 
             tvformat.Items.Add(signalFormatHost);
             signalFormatHost.HostedControl = listBoxSignalFormat;
@@ -1411,7 +1419,7 @@ namespace Test
 
 
             RibbonPanel videopattern = new RibbonPanel();
-            videopattern.Text = "Video Pattern";
+            videopattern.Text = "Content";
 
             videopattern.Items.Add(signalPatternHost);
             signalPatternHost.HostedControl = listBoxSignalPattern;
@@ -1423,20 +1431,88 @@ namespace Test
                 listBoxSignalPattern.Items.Add(src);
             }
 
-            ribbonEquipmentSetting.Panels.Add(connectionTest);
+            
             ribbonEquipmentSetting.Panels.Add(signalType);
             ribbonEquipmentSetting.Panels.Add(tvformat);
             ribbonEquipmentSetting.Panels.Add(videopattern);
 
-            /*
-            RibbonPanel cameraAndMic = new RibbonPanel();
-            cameraAndMic.Text = "Camera And Microfon";
-            ribbonEquipmentSetting.Panels.Add(cameraAndMic);
+        }
 
-            RibbonPanel previewImageCam = new RibbonPanel();
-            ribbonEquipmentSetting.Panels.Add(previewImageCam);
-            */
+        private void PopulateUI_IR()
+        {
+            RibbonPanel IRSetting = new RibbonPanel();
+            IRSetting.Text = "IR Setting";
+            ribbonEquipmentSetting.Panels.Add(IRSetting);
 
+            panelRCFormat = new Panel();
+            panelRCFormat.Size = new Size(100, 50);
+
+            // RC Format List
+            cbRCFormatList = new ComboBox();
+            cbRCFormatList.Size = new Size(100, 20);
+            cbRCFormatList.SelectedIndexChanged += new EventHandler(cbRCFormatList_SelectedIndexChanged);
+            foreach (string fmt in EnumListUser.RCFORMAT)
+            {
+                cbRCFormatList.Items.Add(fmt);
+            }
+            panelRCFormat.Controls.Add(cbRCFormatList);
+
+            // RC Format List
+            cbRCKeyList = new ComboBox();
+            cbRCKeyList.Size = new Size(100, 20);
+            cbRCKeyList.SelectedIndexChanged += new EventHandler(cbRCKeyList_SelectedIndexChanged);
+            cbRCKeyList.Location = new Point(panelRCFormat.Controls[panelRCFormat.Controls.Count - 1].Location.X,
+                    panelRCFormat.Controls[panelRCFormat.Controls.Count - 1].Location.Y + cbRCFormatList.Height + 5);
+
+            cbRCFormatList.SelectedIndex = (int)EnumListUser.IR_RC_FORMAT.PHILIPS_RC5;// initialized
+            foreach (string key in EnumListUser.KEY_PHILIPS_RC5)
+            {
+                cbRCKeyList.Items.Add(key);
+            } 
+            panelRCFormat.Controls.Add(cbRCKeyList);
+
+            RibbonHost panelRCFormatHost = new RibbonHost();
+            panelRCFormatHost.HostedControl = panelRCFormat;
+
+            // Send Button Settings
+            btRCKeyTransmit = new Button();
+            btRCKeyTransmit.Text = "Send";
+            btRCKeyTransmit.Size = new Size(50, 55);
+            btRCKeyTransmit.Enabled = true;
+            btRCKeyTransmit.FlatStyle = FlatStyle.Popup;
+            btRCKeyTransmit.BackColor = Color.LightBlue;
+            btRCKeyTransmit.Click += new EventHandler(btRCKeyTransmit_Click);
+
+            RibbonHost btRCTransmitHost = new RibbonHost();
+            btRCTransmitHost.HostedControl = btRCKeyTransmit;
+
+            IRSetting.Items.Add(panelRCFormatHost);
+            IRSetting.Items.Add(btRCTransmitHost);
+
+
+            panelRCFormat.Enabled = false;
+            btRCKeyTransmit.Enabled = false;
+
+        }
+
+        private void PopulateUI_DebugMsg()
+        {
+            RibbonPanel weatherSpoon = new RibbonPanel();
+            weatherSpoon.Text = "Weather Spoon";
+            ribbonEquipmentSetting.Panels.Add(weatherSpoon);
+
+            Panel panelExtra = new Panel();
+            panelExtra.Size = new Size(155, 50);
+
+            tbWeatherSpoon = new TextBox();
+            tbWeatherSpoon.Size = new Size(panelExtra.Size.Width, panelExtra.Size.Height);
+            tbWeatherSpoon.Multiline = true;
+            panelExtra.Controls.Add(tbWeatherSpoon);
+
+            RibbonHost panelExtraHost = new RibbonHost();
+            panelExtraHost.HostedControl = panelExtra;
+
+            weatherSpoon.Items.Add(panelExtraHost);
         }
 
         private void PopulateUI_Camera()
@@ -1591,19 +1667,7 @@ namespace Test
                 cbCamList.Enabled = false;
             }
             else
-            {/*
-                if (Saal.videoDisplay.IsRunning)
-                {
-                    btOnOffCam.BackColor = Color.LightBlue;
-                    btOnOffCam.Text = "On";
-                    Saal.videoDisplay.SignalToStop();
-                    Saal.videoDisplay.WaitForStop();
-                    if (Picture.Image != null)
-                    {
-                        Picture.Image.Dispose();
-                        Picture.Image = null;
-                    }
-                }*/
+            {
                 btOnOffCam.Text = "On";
                 _cameraThread.Abort();
                 cbCamList.Enabled = true;
@@ -1630,106 +1694,6 @@ namespace Test
                     }
                 }
             }*/
-        }
-
-        private void InitCamera_Mic()
-        {
-            // Init for camera box
-            string[] cameras = null, microphone = null;
-
-            mysaal.CAM_GetCAMList(out cameras);
-            mysaal.CAM_Init(cameras[0]);
-            //mysaal.videoDisplay.NewFrame += new NewFrameEventHandler(video_NewFrame);
-            /*
-            foreach (string cam in cameras)
-            {
-                Console.WriteLine(cam);
-                RibbonLabel listcam = new RibbonLabel();
-                listcam.Text = cam;
-                cameraList.DropDownItems.Add(listcam);
-
-                //cameraResolution.DropDownItems.Add(listcam);
-            }
-            //cameraList.SelectedItem = 0;            //To display the camera's name on the cmbCamera combobox
-            */
-            mysaal.MIC_GetMICList(out microphone);
-            mysaal.MIC_Init(microphone[0]);
-            /*foreach (string mic in microphone)
-            {
-                Console.WriteLine(mic);
-                RibbonLabel listmic = new RibbonLabel();
-                listmic.Text = mic;
-                microfon.DropDownItems.Add(listmic);
-            }
-            //microfon.SelectedItem.SelectedIndex = 0;        //To display the microphone's name on the cmbMicrophone combobox
-             */
-            
-        }
-/*
-        private void video_NewFrame(object sender, NewFrameEventArgs eventArgs)
-        {
-            Size size = new Size(640, 480);
-            Bitmap video = new Bitmap(size.Width, size.Height);
-
-            using (Graphics g = Graphics.FromImage((System.Drawing.Image)video))
-            {
-                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                g.DrawImage((Bitmap)eventArgs.Frame.Clone(), 0, 0, size.Width, size.Height);
-            }
-
-            if (video != null)
-            { 
-                pictureBox.Image = (Bitmap)video.Clone();
-            }
-
-            video.Dispose();
-        }
-*/
-        private void EquipmentInit()
-        {
-            ManagementObjectCollection ManObjReturn;
-            ManagementObjectSearcher ManObjSearch;
-            ManObjSearch = new ManagementObjectSearcher("Select * from WIN32_PnPEntity");
-            ManObjReturn = ManObjSearch.Get();
-
-            Console.WriteLine("list of equipment....");
-            int i = 0;
-            foreach (ManagementObject ManObj in ManObjReturn)
-            {
-                if (ManObj["Manufacturer"] != null)
-                {
-                    Console.WriteLine(i + "->"+ManObj["Caption"].ToString());
-                    i++;
-                    if (ManObj["Manufacturer"].ToString().Contains("Quantum Data"))
-                    {
-                        Console.WriteLine(ManObj["Manufacturer"].ToString());
-                        if (ManObj["Caption"] != null)
-                        {
-                            string[] portnames = SerialPort.GetPortNames();
-
-                            foreach (string port in portnames)
-                            {
-                                if (ManObj["Caption"].ToString().Contains(port))
-                                {
-                                    Console.WriteLine(ManObj["Caption"].ToString());
-                                    String resultport = Regex.Match(port, @"\d+").Value;
-                                    Console.WriteLine(resultport);
-                                    Byte portnum = Byte.Parse(resultport);
-
-                                   // IRToySettings = new IrToySettings { ComPort = portnum, UseHandshake = true, UseNotifyOnComplete = true, UseTransmitCount = true };
-
-                                   // IRToyKeySend.Enabled = true;
-
-                                    //connection
-
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
         }
 
         private void dataGridView_CellClick(object sender, DataGridViewCellEventArgs e)
@@ -1774,6 +1738,254 @@ namespace Test
                 imageviewer.Text = paths[0];
                 imageviewer.Show();
             //}
+        }
+
+        private void cbRCFormatList_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            IrFormat = cbRCFormatList.Text;
+            cbRCKeyList.Items.Clear();
+            
+            if (cbRCFormatList.SelectedIndex == (int)EnumListUser.IR_RC_FORMAT.PHILIPS_RC5)
+            {
+                m_formatRC = EnumListUser.IR_RC_FORMAT.PHILIPS_RC5;
+                foreach (string key in EnumListUser.KEY_PHILIPS_RC5)
+                {
+                    cbRCKeyList.Items.Add(key);
+                }
+            }
+            
+            else if (cbRCFormatList.SelectedIndex == (int)EnumListUser.IR_RC_FORMAT.PHILIPS_RC6)
+            {
+                m_formatRC = EnumListUser.IR_RC_FORMAT.PHILIPS_RC6;
+                foreach (string key in EnumListUser.KEY_PHILIPS_RC6)
+                {
+                    cbRCKeyList.Items.Add(key);
+                }
+            }
+            else if (cbRCFormatList.SelectedIndex == (int)EnumListUser.IR_RC_FORMAT.Matsushita)
+            {
+                m_formatRC = EnumListUser.IR_RC_FORMAT.Matsushita;
+                foreach (string key in EnumListUser.KEY_MATSUSHITA)
+                {
+                    cbRCKeyList.Items.Add(key);
+                }
+            }
+            else if (cbRCFormatList.SelectedIndex == (int)EnumListUser.IR_RC_FORMAT.NEC_THAI)
+            {
+                m_formatRC = EnumListUser.IR_RC_FORMAT.NEC_THAI;
+                foreach (string key in EnumListUser.KEY_NEC_THAI)
+                {
+                    cbRCKeyList.Items.Add(key);
+                }
+            }
+            else if (cbRCFormatList.SelectedIndex == (int)EnumListUser.IR_RC_FORMAT.NEC_INDIA)
+            {
+                m_formatRC = EnumListUser.IR_RC_FORMAT.NEC_THAI;
+                foreach (string key in EnumListUser.KEY_NEC_INDIA)
+                {
+                    cbRCKeyList.Items.Add(key);
+                }
+            }
+            else if (cbRCFormatList.SelectedIndex == (int)EnumListUser.IR_RC_FORMAT.NEC)
+            {
+                m_formatRC = EnumListUser.IR_RC_FORMAT.NEC;
+                foreach (string key in EnumListUser.KEY_NEC)
+                {
+                    cbRCKeyList.Items.Add(key);
+                }
+            }
+            else if (cbRCFormatList.SelectedIndex == (int)EnumListUser.IR_RC_FORMAT.SANYO)
+            {
+                m_formatRC = EnumListUser.IR_RC_FORMAT.SANYO;
+                foreach (string key in EnumListUser.KEY_SANYO)
+                {
+                    cbRCKeyList.Items.Add(key);
+                }
+            }
+            
+            cbRCKeyList.SelectedIndex = 0;
+        }
+
+        private void cbRCKeyList_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (cbRCFormatList.SelectedIndex == (int)EnumListUser.IR_RC_FORMAT.PHILIPS_RC5)
+            {
+                IrKey = EnumListUser.KEY_PHILIPS_RC5[cbRCKeyList.SelectedIndex];
+            }
+
+            else if (cbRCFormatList.SelectedIndex == (int)EnumListUser.IR_RC_FORMAT.PHILIPS_RC6)
+            {
+                IrKey = EnumListUser.KEY_PHILIPS_RC6[cbRCKeyList.SelectedIndex];
+            }
+            else if (cbRCFormatList.SelectedIndex == (int)EnumListUser.IR_RC_FORMAT.Matsushita)
+            {
+                IrKey = EnumListUser.KEY_MATSUSHITA[cbRCKeyList.SelectedIndex];
+            }
+            else if (cbRCFormatList.SelectedIndex == (int)EnumListUser.IR_RC_FORMAT.NEC_THAI)
+            {
+                IrKey = EnumListUser.KEY_NEC_THAI[cbRCKeyList.SelectedIndex];
+            }
+            else if (cbRCFormatList.SelectedIndex == (int)EnumListUser.IR_RC_FORMAT.NEC_INDIA)
+            {
+                IrKey = EnumListUser.KEY_NEC_INDIA[cbRCKeyList.SelectedIndex];
+            }
+            else if (cbRCFormatList.SelectedIndex == (int)EnumListUser.IR_RC_FORMAT.NEC)
+            {
+                IrKey = EnumListUser.KEY_NEC[cbRCKeyList.SelectedIndex];
+            }
+            else if (cbRCFormatList.SelectedIndex == (int)EnumListUser.IR_RC_FORMAT.SANYO)
+            {
+                IrKey = EnumListUser.KEY_SANYO[cbRCKeyList.SelectedIndex];
+            }
+
+            
+        }
+
+        private void btRCKeyTransmit_Click(object sender, EventArgs e)
+        {
+            if (IR_RemoteConnected == null)
+            {
+                MessageBox.Show("Please check the IR remote connection");
+            }
+            else
+            {
+                //IrFormat = EnumListUser.RCFORMAT[(int)EnumListUser.IR_RC_FORMAT.PHILIPS_RC5];
+                //IrKey = EnumListUser.KEY_PHILIPS_RC5[(int)EnumListUser.IR_PHILIP_RC5.MENU];
+                Console.WriteLine(IrFormat + "  " + IrKey);
+                mysaal.IRTRANS_SendCMD(IrFormat, IrKey);
+            }
+        }
+
+        delegate void UpdateWeatherSpooningUIDelegate(string info);
+
+        void UpdateWeatherSpooningUI(string info)
+        {
+
+            if (tbWeatherSpoon.InvokeRequired)
+            {
+                tbWeatherSpoon.Invoke(new UpdateWeatherSpooningUIDelegate(UpdateWeatherSpooningUI), info);
+            }
+            else
+            {
+                tbWeatherSpoon.Text = info;
+            }
+
+        }
+
+        // each remote have differet key name event it's refering to the same purpose
+        private void sendIRTrans(String Key)
+        {
+            switch (Key)
+            {
+                case "MENU":
+                    switch (m_formatRC)
+                    {
+                        case EnumListUser.IR_RC_FORMAT.PHILIPS_RC5:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_PHILIPS_RC5[(int)EnumListUser.IR_PHILIP_RC5.MENU]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.PHILIPS_RC6:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_PHILIPS_RC6[(int)EnumListUser.IR_PHILIP_RC6.MENU]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.Matsushita:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_MATSUSHITA[(int)EnumListUser.IR_MATSUSHITA.MENU]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.NEC_THAI:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_NEC_THAI[(int)EnumListUser.IR_NEC_THAI.MENU]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.NEC_INDIA:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_NEC_INDIA[(int)EnumListUser.IR_NEC_INDIA.MENU]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.NEC:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_NEC[(int)EnumListUser.IR_NEC.MENU]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.SANYO:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_SANYO[(int)EnumListUser.IR_SANYO.MENU]);
+                            break;
+                    }
+                    break;
+
+                case "FORMAT":
+                    switch (m_formatRC)
+                    {
+                        case EnumListUser.IR_RC_FORMAT.PHILIPS_RC5:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_PHILIPS_RC5[(int)EnumListUser.IR_PHILIP_RC5.FORMAT]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.PHILIPS_RC6:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_PHILIPS_RC6[(int)EnumListUser.IR_PHILIP_RC6.FORMAT]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.Matsushita:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_MATSUSHITA[(int)EnumListUser.IR_MATSUSHITA.FORMAT]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.NEC_THAI:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_NEC_THAI[(int)EnumListUser.IR_NEC_THAI.ASPECT]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.NEC_INDIA:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_NEC_INDIA[(int)EnumListUser.IR_NEC_INDIA.ASPECT]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.NEC:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_NEC[(int)EnumListUser.IR_NEC.ASPECT]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.SANYO:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_SANYO[(int)EnumListUser.IR_SANYO.PIXSHAPE]);
+                            break;
+                    }
+                    break;
+
+                case "BACK":
+                    switch (m_formatRC)
+                    {
+                        case EnumListUser.IR_RC_FORMAT.PHILIPS_RC5:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_PHILIPS_RC5[(int)EnumListUser.IR_PHILIP_RC5.BACK]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.PHILIPS_RC6:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_PHILIPS_RC6[(int)EnumListUser.IR_PHILIP_RC6.BACK]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.Matsushita:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_MATSUSHITA[(int)EnumListUser.IR_MATSUSHITA.BACK]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.NEC_THAI:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_NEC_THAI[(int)EnumListUser.IR_NEC_THAI.EXIT]);//assume
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.NEC_INDIA:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_NEC_INDIA[(int)EnumListUser.IR_NEC_INDIA.EXIT]);//assume
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.NEC:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_NEC[(int)EnumListUser.IR_NEC.EXIT]);//assume
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.SANYO:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_SANYO[(int)EnumListUser.IR_SANYO.BACK]);
+                            break;
+                    }
+                    break;
+
+                case "INFO":
+                    switch (m_formatRC)
+                    {
+                        case EnumListUser.IR_RC_FORMAT.PHILIPS_RC5:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_PHILIPS_RC5[(int)EnumListUser.IR_PHILIP_RC5.INFO]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.PHILIPS_RC6:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_PHILIPS_RC6[(int)EnumListUser.IR_PHILIP_RC6.INFO]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.Matsushita:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_MATSUSHITA[(int)EnumListUser.IR_MATSUSHITA.INFO]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.NEC_THAI:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_NEC_THAI[(int)EnumListUser.IR_NEC_THAI.INFO]);
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.NEC_INDIA:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_NEC_INDIA[(int)EnumListUser.IR_NEC_INDIA.DISPLAY]);//assume
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.NEC:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_NEC[(int)EnumListUser.IR_NEC.DISPLAY]);//assume
+                            break;
+                        case EnumListUser.IR_RC_FORMAT.SANYO:
+                            mysaal.IRTRANS_SendCMD(IrFormat, EnumListUser.KEY_SANYO[(int)EnumListUser.IR_SANYO.INFO]);
+                            break;
+                    }
+                    break;
+            }
+
         }
     }
 }

@@ -344,6 +344,8 @@ namespace SAAL
 
             irtObj.IRSend(rctype, key);
 
+            RemoteSent = true;
+
             return bSend;
         }
 
@@ -1312,6 +1314,8 @@ namespace SAAL
                     Console.WriteLine("                       FREEZED     ");
                     NoFreezed = false;
                 }
+
+                RemoteSent = false;
             }
 
             IndexStrUART++;

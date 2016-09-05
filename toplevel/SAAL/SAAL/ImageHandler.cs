@@ -16,9 +16,11 @@ using Emgu.Util;
 using Emgu.CV.UI;
 using System.Threading;
 using System.IO;
+using System.Security;
 using System.Xml;
 using Emgu.CV.Util;
 using System.Timers;
+using System.Text.RegularExpressions;
 
 namespace SAAL
 {
@@ -88,6 +90,9 @@ namespace SAAL
             public string Source;
             public string Info;
             public string Label;
+            public string Opt1;
+            public string Opt2;
+            public string Opt3;
         }
         #endregion
 
@@ -138,6 +143,8 @@ namespace SAAL
         private static TextBox tbWeightBeta;
         private static TextBox tbWeightGamma;
         private static TextBox tbGaussianSigmaX;
+        private static double zoomScale;
+        private static TextBox tbZoomScale;
         #endregion
 
         #region Blurry Check Parameters
@@ -202,7 +209,11 @@ namespace SAAL
         {
             OCR_ITEM_SOURCE,
             OCR_ITEM_LABEL,
-            OCR_ITEM_INFO
+            OCR_ITEM_INFO,
+            OCR_ITEM_OPT1,
+            OCR_ITEM_OPT2,
+            OCR_ITEM_OPT3,
+            OCR_ITEM_MAX
         }
 
         public struct ResSize
@@ -219,13 +230,13 @@ namespace SAAL
         public static String ExtractTextBitmap(Bitmap item) { if (!isEnOCR) MessageBox.Show(ErrorMsg); return ((isEnOCR) ? TextExtractionBitmap(item) : ""); }
         public static Boolean BlurryCheck(Int32 ThresBlurry) { thresBlurry = ThresBlurry; if (!isEnBlurryCheck) MessageBox.Show(ErrorMsg); return ((isEnBlurryCheck) ? blurryCheck() : false); }
         public static Boolean SimilarityCheck(Int32 Period, Int32 Interval, Int32 ThresPSNR, Int32 ThresSSIM) { interval = Interval; period = Period; thresPSNR = ThresPSNR; thresSSIM = ThresSSIM; if (!isEnSimilarityCheck) MessageBox.Show(ErrorMsg); return ((isEnSimilarityCheck) ? similarityCheckFromParent() : false); }
-        public static Boolean RunSimilarityAndBlurryCheck(ref Bitmap referenceBitmap, ref Bitmap probBitmap, 
+        public static Boolean RunSimilarityAndBlurryCheck(Bitmap referenceBitmap, ref Bitmap probBitmap, 
             ref object errorInfo, ref object processInfo, ref bool stop)
         {
             if (!isEnSimilarityCheck || !isEnBlurryCheck)
                 MessageBox.Show(ErrorMsg);
 
-            return ((isEnSimilarityCheck && isEnBlurryCheck) ? similarity_wBlurryCheck(ref referenceBitmap, ref probBitmap, 
+            return ((isEnSimilarityCheck && isEnBlurryCheck) ? similarity_wBlurryCheck(referenceBitmap, ref probBitmap, 
                 ref errorInfo, ref processInfo, ref stop) : false);
         }
         public static String CamName { set { camName = value; } get { return camName; } }
@@ -251,7 +262,17 @@ namespace SAAL
         {
             Saal = new SAAL_Interface();
             tess = new Tesseract("", "eng", OcrEngineMode.TesseractCubeCombined);
-            tess.SetVariable("tessedit_char_whitelist", "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ");
+            //tess = new Tesseract("", "eng", OcrEngineMode.TesseractOnly);
+            /*
+            tess = new Tesseract();
+            tess.SetVariable("load_system_dawg", "F");
+            tess.SetVariable("load_freq_dawg", "F");
+            tess.SetVariable("user_words_suffix", "user-words");
+            tess.SetVariable("user_patterns_suffix", "user-patterns");
+            tess.SetVariable("tessedit_char_whitelist", "1234567890p1234567890");
+            tess.Init("", "eng", OcrEngineMode.TesseractOnly);
+            */
+            
             XML_fetch_data();
 
             isEnOCR = false;
@@ -274,6 +295,7 @@ namespace SAAL
             WeightGamma = 0;
             GaussianSigmaX = 1.5;
             ThresBinarize = 210;
+            zoomScale = 4;
 
             // Start Operation Dialog
             fmOperationDialog_Open();
@@ -439,6 +461,9 @@ namespace SAAL
             cbOCRItemList.Items.Add("Source");
             cbOCRItemList.Items.Add("Label");
             cbOCRItemList.Items.Add("Info");
+            cbOCRItemList.Items.Add("Option1");
+            cbOCRItemList.Items.Add("Option2");
+            cbOCRItemList.Items.Add("Option3");
             cbOCRItemList.SelectedIndexChanged += new EventHandler(cbOCRItemList_SelectedIndexChanged);
             if (!isEnOCR)
                 cbOCRItemList.Enabled = false;
@@ -587,6 +612,21 @@ namespace SAAL
                     words = _item[i].Info.Split(';');
                     break;
                 }
+                else if (_item[i].Name == cbOCRProfileList.Text && cbOCRItemList.Text == "Option1")
+                {
+                    words = _item[i].Opt1.Split(';');
+                    break;
+                }
+                else if (_item[i].Name == cbOCRProfileList.Text && cbOCRItemList.Text == "Option2")
+                {
+                    words = _item[i].Opt2.Split(';');
+                    break;
+                }
+                else if (_item[i].Name == cbOCRProfileList.Text && cbOCRItemList.Text == "Option3")
+                {
+                    words = _item[i].Opt3.Split(';');
+                    break;
+                }
             }
 
             if (words != null && words.Length != 0)
@@ -624,6 +664,21 @@ namespace SAAL
                 else if (_item[i].Name == cbOCRProfileList.Text && cbOCRItemList.Text == "Info")
                 {
                     words = _item[i].Info.Split(';');
+                    break;
+                }
+                else if (_item[i].Name == cbOCRProfileList.Text && cbOCRItemList.Text == "Option1")
+                {
+                    words = _item[i].Opt1.Split(';');
+                    break;
+                }
+                else if (_item[i].Name == cbOCRProfileList.Text && cbOCRItemList.Text == "Option2")
+                {
+                    words = _item[i].Opt2.Split(';');
+                    break;
+                }
+                else if (_item[i].Name == cbOCRProfileList.Text && cbOCRItemList.Text == "Option3")
+                {
+                    words = _item[i].Opt3.Split(';');
                     break;
                 }
             }
@@ -1001,6 +1056,20 @@ namespace SAAL
             lblOCRCalib1.Location = new Point(10, 10);
             pnlOCRCalib1.Controls.Add(lblOCRCalib1);
 
+            Label lblZoomScale = new Label();
+            lblZoomScale.Text = "Scale :";
+            lblZoomScale.Size = new Size(45, 20);
+            lblZoomScale.Location = new Point(lblOCRCalib1.Location.X, lblOCRCalib1.Location.Y + lblOCRCalib1.Height + 10);
+            pnlOCRCalib1.Controls.Add(lblZoomScale);
+
+            tbZoomScale = new TextBox();
+            tbZoomScale.Text = "8";
+            tbZoomScale.Size = new Size(30, 20);
+            tbZoomScale.TextChanged += tbZoomScale_TextChanged;
+            tbZoomScale.Location = new Point(lblZoomScale.Location.X + lblZoomScale.Width + 2, lblZoomScale.Location.Y - 1);
+            tbZoomScale.TextAlign = HorizontalAlignment.Center;
+            pnlOCRCalib1.Controls.Add(tbZoomScale);
+
             pbOCRCalib1 = new ImageBox();
             pbOCRCalib1.Size = new System.Drawing.Size(320, 180);
             pbOCRCalib1.SizeMode = PictureBoxSizeMode.StretchImage;
@@ -1341,7 +1410,8 @@ namespace SAAL
             tbWeightBeta.Text = "-1.5";
             tbWeightGamma.Text = "0";
             tbGaussianSigmaX.Text = "1.5";
-            tbThresBinarize.Text = "210";           
+            tbThresBinarize.Text = "210";
+            tbZoomScale.Text = "4";
         }
 
         private static void btOCRRefresh_Click(object sender, EventArgs eventArgs)
@@ -1355,6 +1425,12 @@ namespace SAAL
                 isInvBinarize = true;
             else
                 isInvBinarize = false;
+        }
+
+        private static void tbZoomScale_TextChanged(object sender, EventArgs e)
+        {
+            if (tbZoomScale.Text != "")
+                zoomScale = Double.Parse(tbZoomScale.Text);
         }
 
         private static void tbGaussianSigmaX_TextChanged(object sender, EventArgs e)
@@ -1433,31 +1509,42 @@ namespace SAAL
                 isSharpenize = false;
         }
 
-        private static Mat CropImage(string item, Image<Bgr, Byte> processImg)
+        private static Mat CropImage(EN_OCR_ITEM item, Image<Bgr, Byte> processImg)
         {
             string[] words = new string[4];
+            
             processImg.ROI = Rectangle.Empty;
 
             for (int i = 0; i < ItemSize; i++)
             {
                 if (_item[i].Name == test_profile)
                 {
-                    if (item == "Source")
+                    switch (item)
                     {
-                        words = _item[i].Source.Split(';');
-                    }
-                    else if (item == "Label")
-                    {
-                        words = _item[i].Label.Split(';');
-                    }
-                    else if (item == "Info")
-                    {
-                        words = _item[i].Info.Split(';');
+                        case EN_OCR_ITEM.OCR_ITEM_SOURCE:
+                            words = _item[i].Source.Split(';');
+                            break;
+                        case EN_OCR_ITEM.OCR_ITEM_LABEL:
+                            words = _item[i].Label.Split(';');
+                            break;
+                        case EN_OCR_ITEM.OCR_ITEM_INFO:
+                            words = _item[i].Info.Split(';');
+                            break;
+                        case EN_OCR_ITEM.OCR_ITEM_OPT1:
+                            words = _item[i].Opt1.Split(';');
+                            break;
+                        case EN_OCR_ITEM.OCR_ITEM_OPT2:
+                            words = _item[i].Opt2.Split(';');
+                            break;
+                        case EN_OCR_ITEM.OCR_ITEM_OPT3:
+                            words = _item[i].Opt3.Split(';');
+                            break;
                     }
                     Rectangle roi = new Rectangle(convRealSize(int.Parse(words[2]), false), convRealSize(int.Parse(words[3]), true), convRealSize(int.Parse(words[0]), false), convRealSize(int.Parse(words[1]), true));
                     processImg.ROI = roi;
                 }
             }
+            processImg.Resize(zoomScale, Emgu.CV.CvEnum.Inter.Linear);
 
             return processImg.Mat;
         }
@@ -1478,6 +1565,7 @@ namespace SAAL
             return ConvertSize;
         }
 
+        [Obsolete]
         private static String ConvertText(EN_OCR_ITEM item)
         {
             string ret = "";
@@ -1492,6 +1580,46 @@ namespace SAAL
                 case EN_OCR_ITEM.OCR_ITEM_SOURCE:
                     ret = "Source";
                     break;
+                case EN_OCR_ITEM.OCR_ITEM_OPT1:
+                    ret = "Option1";
+                    break;
+                case EN_OCR_ITEM.OCR_ITEM_OPT2:
+                    ret = "Option2";
+                    break;
+                case EN_OCR_ITEM.OCR_ITEM_OPT3:
+                    ret = "Option3";
+                    break;
+            }
+
+            return ret;
+        }
+
+        private static EN_OCR_ITEM ConvertText(String item)
+        {
+            EN_OCR_ITEM ret = EN_OCR_ITEM.OCR_ITEM_MAX;
+            if (item == "Source")
+            {
+                ret = EN_OCR_ITEM.OCR_ITEM_SOURCE;
+            }
+            else if (item == "Label")
+            {
+                ret = EN_OCR_ITEM.OCR_ITEM_LABEL;
+            }
+            else if (item == "Info")
+            {
+                ret = EN_OCR_ITEM.OCR_ITEM_INFO;
+            }
+            else if (item == "Option1")
+            {
+                ret = EN_OCR_ITEM.OCR_ITEM_OPT1;
+            }
+            else if (item == "Option2")
+            {
+                ret = EN_OCR_ITEM.OCR_ITEM_OPT2;
+            }
+            else if (item == "Option3")
+            {
+                ret = EN_OCR_ITEM.OCR_ITEM_OPT3;
             }
             return ret;
         }
@@ -1499,34 +1627,55 @@ namespace SAAL
         private static String TextExtractionFromParent(EN_OCR_ITEM item)
         {
             Mat processImg = new Mat();
-            string itemStr = "";
-            Saal.videoDisplay_cv.Retrieve(processImg, 0);
+            List<string> tempList = new List<String>();
+            string retStr = "null";
 
-            itemStr = ConvertText(item);
-            
-            processImg = CropImage(itemStr, processImg.ToImage<Bgr, Byte>());
-            
-            if (isCLAHE)
+            // Do 10 attemps for OCR processing
+            for (int i = 0; i < 10; i++)
             {
-                processImg = CLAHEHandler(processImg);
-                OperationDialog_updLog("<OCR Pre-processing> Running Clahe...", Color.White);
+                Saal.videoDisplay_cv.Retrieve(processImg, 0);
+
+                processImg = CropImage(item, processImg.ToImage<Bgr, Byte>());
+
+                if (isCLAHE)
+                {
+                    processImg = CLAHEHandler(processImg);
+                    OperationDialog_updLog("<OCR Pre-processing> Running Clahe...", Color.White);
+                    OperationDialog_updRefImg(processImg.Bitmap);
+                }
+
+                processImg = GrayScaleHandler(processImg);
+
+                if (isSharpenize)
+                {
+                    processImg = SharpenHandler(processImg);
+                    OperationDialog_updLog("<OCR Pre-processing> Running Sharpenize...", Color.White);
+                    OperationDialog_updRefImg(processImg.Bitmap);
+                }
+                processImg = BinarizationHandler(processImg);
+                OperationDialog_updLog("<OCR Pre-processing> Running Binarization...", Color.White);
                 OperationDialog_updRefImg(processImg.Bitmap);
+
+                OperationDialog_updLog("<OCR Processing> Running OCR...", Color.White);
+
+                string temp = OCRHandler(item, processImg.ToImage<Gray, Byte>());
+                Console.WriteLine("AMMAR1 --> " + temp);
+                tempList.Add(temp);
             }
 
-            processImg = GrayScaleHandler(processImg);
-
-            if (isSharpenize)
+            int tempCnt = 0;
+            foreach (var grp in tempList.GroupBy(k => k))
             {
-                processImg = SharpenHandler(processImg);
-                OperationDialog_updLog("<OCR Pre-processing> Running Sharpenize...", Color.White);
-                OperationDialog_updRefImg(processImg.Bitmap);
+                Console.WriteLine("AMMAR2 --> {0} : {1}", grp.Key, grp.Count());
+                if(grp.Count() > tempCnt)
+                {
+                    tempCnt = grp.Count();
+                    retStr = grp.Key;
+                    ImageHandler.OperationDialog_updLog("<OCR Post-processing> OCR Highest frequency : " + retStr + " (" +tempCnt + "/10)", Color.White);                                        
+                }
             }
-            processImg = BinarizationHandler(processImg);
-            OperationDialog_updLog("<OCR Pre-processing> Running Binarization...", Color.White);
-            OperationDialog_updRefImg(processImg.Bitmap);
-
-            OperationDialog_updLog("<OCR Processing> Running OCR...", Color.White);
-            return OCRHandler(processImg.ToImage<Gray, Byte>());
+            updOpFlag = true;
+            return retStr;
         }
 
         private static String TextExtractionBitmap(Bitmap img)
@@ -1536,11 +1685,15 @@ namespace SAAL
             return tess.GetText();
         }
 
-        private static void TextExtraction(string item)
+        private static void TextExtraction(string itemStr)
         {
             Mat processImg = new Mat();
+
             Saal.videoDisplay_cv.Retrieve(processImg, 0);
-            
+            EN_OCR_ITEM item = EN_OCR_ITEM.OCR_ITEM_MAX;
+
+            item = ConvertText(itemStr);
+
             processImg = CropImage(item, processImg.ToImage<Bgr, Byte>());
 
             // (1)
@@ -1554,7 +1707,7 @@ namespace SAAL
             pbOCRCalib1.Image = processImg;
             hbOCRCalib1.GenerateHistograms(processImg.ToImage<Bgr, Byte>(), 256);
             hbOCRCalib1.Enabled = true;
-            tblOCRCalib1.Text = OCRHandler(processImg.ToImage<Gray, Byte>());
+            tblOCRCalib1.Text = OCRHandler(item, processImg.ToImage<Gray, Byte>());
             tblOCRCalib1.Refresh();
             pnlOCRCalib1.BackColor = Color.LightGray;
             // Refresh
@@ -1598,7 +1751,7 @@ namespace SAAL
                 pbOCRCalib3.Image = processImg;
                 hbOCRCalib3.GenerateHistograms(processImg.ToImage<Bgr, Byte>(), 256);
                 hbOCRCalib3.Enabled = true;
-                tblOCRCalib3.Text = OCRHandler(processImg.ToImage<Gray, Byte>());
+                tblOCRCalib3.Text = OCRHandler(item, processImg.ToImage<Gray, Byte>());
                 pnlOCRCalib3.BackColor = Color.LightGray;
                 pnlOCRCalib3.Refresh();
             }
@@ -1624,7 +1777,7 @@ namespace SAAL
                 pbOCRCalib4.Image = processImg;
                 hbOCRCalib4.GenerateHistograms(processImg.ToImage<Gray, Byte>(), 256);
                 hbOCRCalib4.Enabled = true;
-                tblOCRCalib4.Text = OCRHandler(processImg.ToImage<Gray, Byte>());
+                tblOCRCalib4.Text = OCRHandler(item, processImg.ToImage<Gray, Byte>());
                 pnlOCRCalib4.BackColor = Color.LightGray;
                 pnlOCRCalib4.Refresh();
             }
@@ -1645,7 +1798,7 @@ namespace SAAL
             pbOCRCalib5.Image = processImg;
             hbOCRCalib5.GenerateHistograms(processImg.ToImage<Gray, Byte>(), 256);
             hbOCRCalib5.Enabled = true;
-            tblOCRCalib5.Text = OCRHandler(processImg.ToImage<Gray, Byte>());
+            tblOCRCalib5.Text = OCRHandler(item, processImg.ToImage<Gray, Byte>());
             pnlOCRCalib5.BackColor = Color.LightGray;
             pnlOCRCalib5.Refresh();
             // Refresh
@@ -1800,17 +1953,114 @@ namespace SAAL
             return processImgAfter;
         }
 
-        private static String OCRHandler(Image<Gray, Byte> processImg)
+        private static String OCRHandler(EN_OCR_ITEM item, Image<Gray, Byte> processImg)
         {
             Console.WriteLine("Running OCR...");
-            string ret_str;
+            string ret_str = "null";
+
             tess.Recognize(processImg);
             ret_str = tess.GetText();
-            //OperationDialog_updLog("------------ OCR Decode Start ------------");
-            //OperationDialog_updLog(ret_str);
-            //OperationDialog_updLog("------------ OCR Decode Finish -----------");
-            updOpFlag = true;
-            return ret_str;
+            Console.WriteLine("--------------------------------START--------------------------------------");
+            Console.WriteLine("DEBUG OCR RESULT : " + ret_str);
+            Console.WriteLine("--------------------------------FINISH--------------------------------------");
+            return OCRpostprocessing(item, ret_str);
+        }
+
+        private static String OCRpostprocessing(EN_OCR_ITEM item, string strInp)
+        {
+            Console.WriteLine("Running OCR Post processing...");
+            string strOut = "null";     
+            switch (item)
+            {
+                case EN_OCR_ITEM.OCR_ITEM_INFO:
+                    //if (Regex.Match(strInp, @"SI\)|S0|SD|5I|50|5D").Success)
+                    //    strOut = "SD";
+                    char[] whitespace = new char[] { ' ', '\t' };
+                    string[] strInp_split = strInp.Split(whitespace);
+
+                    // Check splitted array number
+                    int cnt = 0;
+                    foreach(string str in strInp_split)
+                    {
+                        cnt++;
+                    }
+                    if (cnt < 2)
+                    {
+                        strOut = strInp_split[0];
+                        break;
+                    }
+
+                    // Start comparison
+                    Int32 comp = 0;
+                    Int32 compTemp = 0;
+                    foreach (string pat in EnumListUser.OCR_RESOLUTION)
+                    {
+                        comp = OCRpostprocessing_Info(strInp_split[1], pat);
+                        if (comp > compTemp)
+                        {
+                            Console.WriteLine(strInp_split[1] + " -> " + pat + "(" + comp + "%)");
+                            compTemp = comp;
+                            strOut = pat;
+                        }
+                    }                    
+                    strOut = strInp_split[0] + " " + strOut;
+                    break;
+                case EN_OCR_ITEM.OCR_ITEM_LABEL:
+                    if (Regex.Match(strInp, @"Close|Cl|ose|C|se|lo").Success)
+                        strOut = "Close";
+                    break;
+                case EN_OCR_ITEM.OCR_ITEM_SOURCE:
+                    if (Regex.Match(strInp, @"CAST|ST|CAS").Success)
+                        strOut = "CAST";
+                    else if (Regex.Match(strInp, @"TV").Success)
+                        strOut = "TV";
+                    else if (Regex.Match(strInp, @"HDMIl|HDMI1|I1|1|MII|MIL|IL|II").Success)
+                        strOut = "HDMI1";
+                    else if (Regex.Match(strInp, @"HDMI2|I2|2|HDMIZ|IHDMIz|IZ").Success)
+                        strOut = "HDMI2";
+                    else if (Regex.Match(strInp, @"HDMI3|I3|3").Success)
+                        strOut = "HDMI3";
+                    else if (Regex.Match(strInp, @"HDMI4|I4|4").Success)
+                        strOut = "HDMI4";
+                    else if (Regex.Match(strInp, @"Video|Vdeo|deo|Vito").Success)
+                        strOut = "Video";
+                    else if (Regex.Match(strInp, @"PC").Success)
+                        strOut = "PC";
+                    else if (Regex.Match(strInp, @"USB|sb|us").Success)
+                        strOut = "USB";
+                    break;
+            }
+
+            return strOut;
+        }
+
+        private static Int32 OCRpostprocessing_Info(string input, string pattern)
+        {
+            Int32 perc = 0;
+            char[] inp_arrs = input.ToCharArray();
+            char[] pat_arrs = pattern.ToCharArray();
+            int j_temp = 0;
+            int match_cnt = 0;
+            //Console.WriteLine("Compare : " + input + " -- " + pattern);
+            for (int i = 0; i < pat_arrs.Length; i++)
+            {
+                for (int j = j_temp; j < inp_arrs.Length; j++)
+                {
+                    //Console.WriteLine("Compare " + pat_arrs[i] + " -- " + inp_arrs[j]);
+                    if (pat_arrs[i] == inp_arrs[j])
+                    {
+                        j_temp = j;
+                        match_cnt++;
+                        //Console.WriteLine("Found ");
+                        break;
+                    }
+                }
+            }
+
+            if(pat_arrs.Length > 0)
+                perc = match_cnt * 100 / pat_arrs.Length;
+
+            return perc;
         }
 
         #endregion
@@ -2220,22 +2470,25 @@ namespace SAAL
             tbSimilarityInterval.Text = (interval/1000).ToString();
         }
 
-        public static void drawWatermark(ref Bitmap bmp, string str)
+        public static void drawWatermark(ref Bitmap bmp, string str, float fontSize = 18, Size position = default(Size))
         {
             //this is to handle error (graphic cannot be created from indexed image)
             var newBitmap = new Bitmap(bmp);
+            newBitmap.Tag = bmp.Tag;
             bmp.Dispose();
             bmp = newBitmap;
 
             using (Graphics g = Graphics.FromImage(bmp))
             {
                 string text1 = str;
-                using (Font font1 = new Font("Arial", 12, FontStyle.Bold, GraphicsUnit.Point))
+                using (Font font1 = new Font("Arial", fontSize, FontStyle.Bold, GraphicsUnit.Pixel))
                 {
                     StringFormat stringFormat = new StringFormat();
                     stringFormat.Alignment = StringAlignment.Near;
                     stringFormat.LineAlignment = StringAlignment.Near;
-                    var drawBox = new Rectangle(0, 0, bmp.Width, bmp.Height);
+
+                    var drawBox = new Rectangle(position.Width, position.Height, bmp.Width, bmp.Height);
+
                     g.DrawString(text1, font1, new SolidBrush(Color.FromArgb(200, Color.Red)), drawBox, stringFormat);
                 }
             }
@@ -2279,11 +2532,9 @@ namespace SAAL
             return ret;
         }
 
-        private static Boolean similarity_wBlurryCheck(ref Bitmap referenceBitmap, ref Bitmap probBitmap, 
+        private static Boolean similarity_wBlurryCheck(Bitmap referenceBitmap, ref Bitmap probBitmap, 
             ref object errorInfo, ref object processInfo, ref bool stop)
         {
-            Mat processImgRef = new Mat();
-
             double psnrV = 0.0;
             MCvScalar mssimV = new MCvScalar();
             Int32 periodCnt = 0;
@@ -2292,10 +2543,9 @@ namespace SAAL
 
             if (period > 0 && interval > 0)
                 periodCnt = period / interval;
-
-
-            Saal.videoDisplay_cv.Retrieve(processImgRef, 0); // Reference
-
+            
+            var processImgRef = new Image<Bgr, Byte>(referenceBitmap).Mat;
+            
             for (int i = 0; i < periodCnt; i++)
             {
                 if (stop)
@@ -2303,6 +2553,7 @@ namespace SAAL
 
                 Mat processImg = new Mat();
                 Saal.videoDisplay_cv.Retrieve(processImg, 0);
+                var captureTime = "Time taken: " + DateTime.Now;
 
                 // begin similarityTest
                 var imageSimilarityTest = processImg.Clone();
@@ -2310,6 +2561,7 @@ namespace SAAL
                 if (psnrV < thresPSNR)
                 {
                     mssimV = getMSSIM(processImgRef, imageSimilarityTest);
+
 
                     bool similarityTest = ((double)(mssimV.V2 * 100) < (double)thresSSIM) &&
                                           ((double)(mssimV.V1 * 100) < (double)thresSSIM) &&
@@ -2325,7 +2577,7 @@ namespace SAAL
                 if (!retSimilarTest)
                 {
                     probBitmap = processImg.Clone().Bitmap;
-                    referenceBitmap = processImgRef.Clone().Bitmap;
+                    probBitmap.Tag = captureTime;
                     processImg.Dispose();
                     processInfo = new[] { (int)psnrV, (int)(mssimV.V0 * 100), (int)(mssimV.V1 * 100), (int)(mssimV.V2 * 100), 0 };
                     break;
@@ -2373,7 +2625,6 @@ namespace SAAL
                 if (!retBlurTest)
                 {
                     probBitmap = processImg.Clone().Bitmap;
-                    referenceBitmap = processImgRef.Clone().Bitmap;
                     processImg.Dispose();
                     processInfo = new[] { (int)psnrV, (int)(mssimV.V0 * 100), (int)(mssimV.V1 * 100), (int)(mssimV.V2 * 100), (int)data.Variance() };
                     break;
@@ -3037,6 +3288,7 @@ namespace SAAL
                             count++;
                     }
                 }
+
                 return (double)count / (ImageBgr.Rows * ImageBgr.Cols) * 100;
             }
         }
@@ -3094,6 +3346,9 @@ namespace SAAL
                 _item[i].Source = profile.Element("SOURCE").Value.ToString();
                 _item[i].Info = profile.Element("INFO").Value.ToString();
                 _item[i].Label = profile.Element("LABEL").Value.ToString();
+                //_item[i].Opt1 = profile.Element("OPTION1").Value.ToString();
+                //_item[i].Opt2 = profile.Element("OPTION2").Value.ToString();
+                //_item[i].Opt3 = profile.Element("OPTION3").Value.ToString();
                 i++;
             }
 
@@ -3123,6 +3378,18 @@ namespace SAAL
                     {
                         _item[i].Info = tbOCR_W.Text + ";" + tbOCR_H.Text + ";" + tbOCR_X.Text + ";" + tbOCR_Y.Text;
                     }
+                    else if (cbOCRItemList.Text == "Option1")
+                    {
+                        _item[i].Opt1 = tbOCR_W.Text + ";" + tbOCR_H.Text + ";" + tbOCR_X.Text + ";" + tbOCR_Y.Text;
+                    }
+                    else if (cbOCRItemList.Text == "Option2")
+                    {
+                        _item[i].Opt2 = tbOCR_W.Text + ";" + tbOCR_H.Text + ";" + tbOCR_X.Text + ";" + tbOCR_Y.Text;
+                    }
+                    else if (cbOCRItemList.Text == "Option3")
+                    {
+                        _item[i].Opt3 = tbOCR_W.Text + ";" + tbOCR_H.Text + ";" + tbOCR_X.Text + ";" + tbOCR_Y.Text;
+                    }
                     break;
                 }
                 else if (_item[i].Name == null || _item[i].Name == "")
@@ -3134,19 +3401,54 @@ namespace SAAL
                         _item[i].Source = tbOCR_W.Text + ";" + tbOCR_H.Text + ";" + tbOCR_X.Text + ";" + tbOCR_Y.Text;
                         _item[i].Label = "10;10;10;10";
                         _item[i].Info = "10;10;10;10";
+                        _item[i].Opt1 = "10;10;10;10";
+                        _item[i].Opt2 = "10;10;10;10";
+                        _item[i].Opt3 = "10;10;10;10";
                     }
                     else if (cbOCRItemList.Text == "Label")
                     {
                         _item[i].Source = "10;10;10;10";
                         _item[i].Label = tbOCR_W.Text + ";" + tbOCR_H.Text + ";" + tbOCR_X.Text + ";" + tbOCR_Y.Text;
                         _item[i].Info = "10;10;10;10";
-
+                        _item[i].Opt1 = "10;10;10;10";
+                        _item[i].Opt2 = "10;10;10;10";
+                        _item[i].Opt3 = "10;10;10;10";
                     }
                     else if (cbOCRItemList.Text == "Info")
                     {
                         _item[i].Source = "10;10;10;10";
                         _item[i].Label = "10;10;10;10";
                         _item[i].Info = tbOCR_W.Text + ";" + tbOCR_H.Text + ";" + tbOCR_X.Text + ";" + tbOCR_Y.Text;
+                        _item[i].Opt1 = "10;10;10;10";
+                        _item[i].Opt2 = "10;10;10;10";
+                        _item[i].Opt3 = "10;10;10;10";
+                    }
+                    else if (cbOCRItemList.Text == "Option1")
+                    {
+                        _item[i].Source = "10;10;10;10";
+                        _item[i].Label = "10;10;10;10";
+                        _item[i].Info = "10;10;10;10";
+                        _item[i].Opt1 = tbOCR_W.Text + ";" + tbOCR_H.Text + ";" + tbOCR_X.Text + ";" + tbOCR_Y.Text;
+                        _item[i].Opt2 = "10;10;10;10";
+                        _item[i].Opt3 = "10;10;10;10";
+                    }
+                    else if (cbOCRItemList.Text == "Option2")
+                    {
+                        _item[i].Source = "10;10;10;10";
+                        _item[i].Label = "10;10;10;10";
+                        _item[i].Info = "10;10;10;10";
+                        _item[i].Opt1 = "10;10;10;10";
+                        _item[i].Opt2 = tbOCR_W.Text + ";" + tbOCR_H.Text + ";" + tbOCR_X.Text + ";" + tbOCR_Y.Text;
+                        _item[i].Opt3 = "10;10;10;10";
+                    }
+                    else if (cbOCRItemList.Text == "Option3")
+                    {
+                        _item[i].Source = "10;10;10;10";
+                        _item[i].Label = "10;10;10;10";
+                        _item[i].Info = "10;10;10;10";
+                        _item[i].Opt1 = "10;10;10;10";
+                        _item[i].Opt2 = "10;10;10;10";
+                        _item[i].Opt3 = tbOCR_W.Text + ";" + tbOCR_H.Text + ";" + tbOCR_X.Text + ";" + tbOCR_Y.Text;
                     }
                     break;
                 }
@@ -3171,7 +3473,11 @@ namespace SAAL
                     new XElement("NAME", _item[i].Name),
                     new XElement("SOURCE", _item[i].Source),
                     new XElement("LABEL", _item[i].Label),
-                    new XElement("INFO", _item[i].Info)));
+                    new XElement("INFO", _item[i].Info),
+                    new XElement("OPTION1", _item[i].Opt1),
+                    new XElement("OPTION2", _item[i].Opt2),
+                    new XElement("OPTION3", _item[i].Opt3)
+                    ));
             }
             xmlFile.Save(XMLfile);
             MessageBox.Show("Done !!!");
@@ -3188,8 +3494,8 @@ namespace SAAL
             //createNodeGRID("SANYO_55W", "10;10;10;10", "10;10;10;10", "10;10;10;10", writer);
             writer.WriteEndElement();
             writer.WriteStartElement("OCR");
-            createNodeOCR("SANYO_55W", "10;10;10;10", "10;10;10;10", "10;10;10;10", writer);
-            createNodeOCR("PHILIPS_55W", "20;20;20;20", "20;20;20;20", "20;20;20;20", writer);
+            createNodeOCR("SANYO_55W", "10;10;10;10", "10;10;10;10", "10;10;10;10", "10;10;10;10", "10;10;10;10", "10;10;10;10", writer);
+            createNodeOCR("PHILIPS_55W", "20;20;20;20", "20;20;20;20", "20;20;20;20", "20;20;20;20", "20;20;20;20", "20;20;20;20", writer);
             writer.WriteEndElement();
             writer.WriteEndElement();
             writer.WriteEndDocument();
@@ -3197,7 +3503,7 @@ namespace SAAL
 
         }
 
-        private static void createNodeOCR(string Item1, string Item2, string Item3, string Item4, XmlTextWriter writer)
+        private static void createNodeOCR(string Item1, string Item2, string Item3, string Item4, string Item5, string Item6, string Item7, XmlTextWriter writer)
         {
             // Item1 : Name
             // Item2 : Source
@@ -3216,10 +3522,19 @@ namespace SAAL
             writer.WriteStartElement("LABEL");
             writer.WriteString(Item4);
             writer.WriteEndElement();
+            writer.WriteStartElement("OPTION1");
+            writer.WriteString(Item5);
+            writer.WriteEndElement();
+            writer.WriteStartElement("OPTION2");
+            writer.WriteString(Item6);
+            writer.WriteEndElement();
+            writer.WriteStartElement("OPTION3");
+            writer.WriteString(Item7);
+            writer.WriteEndElement();
             writer.WriteEndElement();
         }
 
-        private static void createNodeGRID(string Item1, string Item2, string Item3, string Item4, XmlTextWriter writer)
+        private static void createNodeGRID(string Item1, string Item2, string Item3, string Item4, string Item5, string Item6, string Item7, XmlTextWriter writer)
         {
 
         }

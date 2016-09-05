@@ -33,20 +33,26 @@
             this.total_time = new System.Windows.Forms.Label();
             this.button1 = new System.Windows.Forms.Button();
             this.label2 = new System.Windows.Forms.Label();
+            this.refPictureBox = new System.Windows.Forms.PictureBox();
+            this.camPictureBox = new System.Windows.Forms.PictureBox();
+            this.label3 = new System.Windows.Forms.Label();
+            this.label4 = new System.Windows.Forms.Label();
+            ((System.ComponentModel.ISupportInitialize)(this.refPictureBox)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.camPictureBox)).BeginInit();
             this.SuspendLayout();
             // 
             // progressBar1
             // 
-            this.progressBar1.Location = new System.Drawing.Point(20, 65);
+            this.progressBar1.Location = new System.Drawing.Point(24, 364);
             this.progressBar1.Name = "progressBar1";
-            this.progressBar1.Size = new System.Drawing.Size(340, 23);
+            this.progressBar1.Size = new System.Drawing.Size(679, 23);
             this.progressBar1.Style = System.Windows.Forms.ProgressBarStyle.Continuous;
             this.progressBar1.TabIndex = 0;
             // 
             // label1
             // 
             this.label1.AutoSize = true;
-            this.label1.Location = new System.Drawing.Point(17, 22);
+            this.label1.Location = new System.Drawing.Point(21, 321);
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(155, 13);
             this.label1.TabIndex = 1;
@@ -55,7 +61,7 @@
             // total_time
             // 
             this.total_time.AutoSize = true;
-            this.total_time.Location = new System.Drawing.Point(178, 22);
+            this.total_time.Location = new System.Drawing.Point(182, 321);
             this.total_time.Name = "total_time";
             this.total_time.Size = new System.Drawing.Size(22, 13);
             this.total_time.TabIndex = 4;
@@ -63,7 +69,7 @@
             // 
             // button1
             // 
-            this.button1.Location = new System.Drawing.Point(153, 94);
+            this.button1.Location = new System.Drawing.Point(328, 393);
             this.button1.Name = "button1";
             this.button1.Size = new System.Drawing.Size(75, 23);
             this.button1.TabIndex = 5;
@@ -73,17 +79,57 @@
             // label2
             // 
             this.label2.AutoSize = true;
-            this.label2.Location = new System.Drawing.Point(17, 39);
+            this.label2.Location = new System.Drawing.Point(21, 338);
             this.label2.Name = "label2";
             this.label2.Size = new System.Drawing.Size(0, 13);
             this.label2.TabIndex = 6;
+            // 
+            // refPictureBox
+            // 
+            this.refPictureBox.Location = new System.Drawing.Point(24, 58);
+            this.refPictureBox.Name = "refPictureBox";
+            this.refPictureBox.Size = new System.Drawing.Size(320, 240);
+            this.refPictureBox.SizeMode = System.Windows.Forms.PictureBoxSizeMode.StretchImage;
+            this.refPictureBox.TabIndex = 7;
+            this.refPictureBox.TabStop = false;
+            // 
+            // camPictureBox
+            // 
+            this.camPictureBox.Location = new System.Drawing.Point(383, 58);
+            this.camPictureBox.Name = "camPictureBox";
+            this.camPictureBox.Size = new System.Drawing.Size(320, 240);
+            this.camPictureBox.SizeMode = System.Windows.Forms.PictureBoxSizeMode.StretchImage;
+            this.camPictureBox.TabIndex = 8;
+            this.camPictureBox.TabStop = false;
+            // 
+            // label3
+            // 
+            this.label3.AutoSize = true;
+            this.label3.Location = new System.Drawing.Point(380, 39);
+            this.label3.Name = "label3";
+            this.label3.Size = new System.Drawing.Size(97, 13);
+            this.label3.TabIndex = 9;
+            this.label3.Text = "Camera Livestream";
+            // 
+            // label4
+            // 
+            this.label4.AutoSize = true;
+            this.label4.Location = new System.Drawing.Point(21, 39);
+            this.label4.Name = "label4";
+            this.label4.Size = new System.Drawing.Size(88, 13);
+            this.label4.TabIndex = 10;
+            this.label4.Text = "Reference image";
             // 
             // ProgressBar
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(379, 131);
+            this.ClientSize = new System.Drawing.Size(735, 429);
             this.ControlBox = false;
+            this.Controls.Add(this.label4);
+            this.Controls.Add(this.label3);
+            this.Controls.Add(this.camPictureBox);
+            this.Controls.Add(this.refPictureBox);
             this.Controls.Add(this.label2);
             this.Controls.Add(this.button1);
             this.Controls.Add(this.total_time);
@@ -92,6 +138,8 @@
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
             this.Name = "ProgressBar";
             this.Text = "Executing test..";
+            ((System.ComponentModel.ISupportInitialize)(this.refPictureBox)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.camPictureBox)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -104,5 +152,9 @@
         public System.Windows.Forms.Label total_time;
         public System.Windows.Forms.Button button1;
         public System.Windows.Forms.Label label2;
+        public System.Windows.Forms.PictureBox refPictureBox;
+        public System.Windows.Forms.PictureBox camPictureBox;
+        private System.Windows.Forms.Label label3;
+        private System.Windows.Forms.Label label4;
     }
 }

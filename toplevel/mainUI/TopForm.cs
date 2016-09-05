@@ -471,7 +471,7 @@ namespace mainUI
             }
         }
 
-        private void dataGridView_CellClick(object sender, DataGridViewCellEventArgs e)
+        private void dataGridView_CellDoubleClick(object sender, DataGridViewCellEventArgs e)
         {
             if (m_plugin != null && m_plugin.ClickEvent != null)
                 m_plugin.ClickEvent.Invoke(sender, e);
@@ -513,7 +513,6 @@ namespace mainUI
         void bgWorker_ProgressChanged(object sender, ProgressChangedEventArgs e)
         {
             pbBusy.Visible = true;
-            //pbBusy.Value = e.ProgressPercentage;            
             m_plugin.ProgressBarChangedEvent(sender, e);
         }
 
@@ -658,8 +657,9 @@ namespace mainUI
 
                 foreach (int i in rowNumToExec)
                 {
-                    //dataGridView.Rows[i].Selected = false;
+                    dataGridView.Rows[i].Selected = false;
                     dataGridView.Rows[i].DefaultCellStyle.BackColor = Color.Yellow;
+
                     DataGridViewRow execution = dataGridView.Rows[i];
                     Console.WriteLine("Test Num : " + i);
 
@@ -684,7 +684,7 @@ namespace mainUI
                         break;
                     }
 
-                    // Get datarow
+                    //Get datarow
                     DataGridViewRow executionResult = m_plugin.ToExecute;
                     dataGridView.Rows[i].DefaultCellStyle.BackColor = Color.Empty;
 
@@ -786,8 +786,6 @@ namespace mainUI
                 e.Result = "load";
             }
         }
-
-
         #endregion
 
         private void TopForm_Load(object sender, EventArgs e)

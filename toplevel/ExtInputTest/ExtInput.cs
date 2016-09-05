@@ -940,11 +940,31 @@ namespace Test
             string tempRes = "";
             NGImage = new Bitmap(ImageHandler.ResSize.Width, ImageHandler.ResSize.Height);
 
+            // ----- Checklist Start -----
             Regex imgResult = new Regex(@"Resolution as (\d*\w*)");
             Match match_comp1 = imgResult.Match(input);
 
             imgResult = new Regex(@"OSD of \[(\d*\w*)\]");
             Match match_comp2 = imgResult.Match(input);
+
+            imgResult = new Regex(@"Resolution.*blank");
+            Match match_comp3 = imgResult.Match(input);
+
+            imgResult = new Regex(@"image.* is displayed");
+            Match match_comp4 = imgResult.Match(input);
+
+            imgResult = new Regex(@"image.* is not displayed");
+            Match match_comp5 = imgResult.Match(input);
+
+            imgResult = new Regex(@"is erased");
+            Match match_comp6 = imgResult.Match(input);
+
+            imgResult = new Regex(@"is not erased");
+            Match match_comp7 = imgResult.Match(input);
+
+            imgResult = new Regex(@"INFO.*invalid");
+            Match match_comp8 = imgResult.Match(input);
+            // ----- Checklist End -----
 
             if (IR_checkConnection())
             {
@@ -957,13 +977,13 @@ namespace Test
                 {
                     if (match_comp1.Success || match_comp2.Success)
                     {
+                        // TEST CASE 1,2) Check resolution is displayed
                         if (match_comp1.Success)
                             tempRes = match_comp1.Groups[1].ToString();
                         else
                             tempRes = match_comp2.Groups[1].ToString();
 
-                        // Detect resolution
-                        Console.WriteLine("CASE 1) String : " + input + " Resolution : " + tempRes);
+                        Console.WriteLine("CASE 1,2) String : " + input + " Resolution : " + tempRes);
                         
                         if (infoflag)
                         {
@@ -974,7 +994,7 @@ namespace Test
                             Thread.Sleep(5000);
 
                             // Check if Info menu already open
-                            if (!Regex.Match(ImageHandler.ExtractText(ImageHandler.EN_OCR_ITEM.OCR_ITEM_LABEL), @"Close|Cl|ose|C|se|lo").Success)
+                            if (!Regex.Match(ImageHandler.ExtractText(ImageHandler.EN_OCR_ITEM.OCR_ITEM_OPT1), @"Close|Cl|ose|C|se|lo").Success)
                             {
                                 ImageHandler.OperationDialog_updLog("<KEY> Press BACK", Color.White);
                                 ImageHandler.OperationDialog_updLog("Detecting info menu is not opened. Attempting to open again...", Color.White);
@@ -986,10 +1006,10 @@ namespace Test
                                 continue;
                             }
                         }
-                        if (InfoPostProcessing(ImageHandler.ExtractText(ImageHandler.EN_OCR_ITEM.OCR_ITEM_INFO), tempRes))
-                        {
-                            ret = true;
+                        if (ImageHandler.ExtractText(ImageHandler.EN_OCR_ITEM.OCR_ITEM_INFO).Contains(tempRes))
+                        {                            
                             ImageHandler.OperationDialog_updLog("<Result OK>", Color.Green);
+                            ret = true;
                             break;
                         }
                         else
@@ -1014,68 +1034,67 @@ namespace Test
                             tryAgain++;
                         }
                     }
-                    else
+                    else if(match_comp3.Success)
                     {
-                        // Detect blank image
-                        Console.WriteLine("CASE 2) String " + input);                        
+                        // TEST CASE 3) Check blank resolution is displayed
+                        Console.WriteLine("CASE 3) String " + input);
+                        break;
+                    }
+                    else if (match_comp4.Success || match_comp5.Success)
+                    {
+                        // TEST CASE 4,5) Check image is displayed or not displayed
+                        Console.WriteLine("CASE 4,5) String " + input);                        
 
                         var binaryImage = ImageHandler.GetBinarialImage_Global(ImageHandler.CurrentFrame, 20);
-                        //binaryImage.Save("test.jpg");
+
                         double perc = (int)ImageHandler.GetBlackPixelPercentage(binaryImage);
                         ImageHandler.OperationDialog_updLog("<Binarization Process> Black pixel percentage : " + perc + "%", Color.White);
                         if (perc < 40)
                         {
                             Console.WriteLine("White");
-                            ImageHandler.OperationDialog_updLog("<Result OK>", Color.Green);
-                            ret = true;
+                            if(match_comp4.Success)
+                            {
+                                ImageHandler.OperationDialog_updLog("<Result OK>", Color.Green);
+                                ret = true;
+                            }
+                            else
+                            {
+                                NGImage = ImageHandler.CurrentFrame;
+                                ImageHandler.OperationDialog_updRefCom((Bitmap)NGImage.Clone());
+                                ImageHandler.OperationDialog_updLog("<Result NG> Saving NG Image...", Color.Red);
+                                ret = false;
+                            }                            
                         }
                         else
                         {
-                            Console.WriteLine("Black");                            
-                            NGImage = ImageHandler.CurrentFrame;
-                            ImageHandler.OperationDialog_updRefCom((Bitmap)NGImage.Clone());
-                            ImageHandler.OperationDialog_updLog("<Result NG> Saving NG Image...", Color.Red);
-                            ret = false;
-                        }
-
+                            Console.WriteLine("Black");
+                            if (match_comp4.Success)
+                            {
+                                NGImage = ImageHandler.CurrentFrame;
+                                ImageHandler.OperationDialog_updRefCom((Bitmap)NGImage.Clone());
+                                ImageHandler.OperationDialog_updLog("<Result NG> Saving NG Image...", Color.Red);
+                                ret = false;
+                            }
+                            else
+                            {
+                                ImageHandler.OperationDialog_updLog("<Result OK>", Color.Green);
+                                ret = true;
+                            }
+                        }                        
                         break;
                     }
-                }
-                //Saal.IRTOYS_CloseCon();
-            }
-            return ret;
-        }
-
-        private Boolean InfoPostProcessing(string input, string pattern)
-        {
-            bool ret = false;
-            char[] delimiterChars = { ' ', ',', '.', ':', '\t' };
-            char[] inp_arrs = input.ToCharArray();
-            char[] pat_arrs = pattern.ToCharArray();
-            int j_temp = 0;
-            int match_cnt = 0;
-            //Console.WriteLine("Compare : " + input + " -- " + pattern);
-            for (int i = 0; i < pat_arrs.Length; i++)
-            {
-                for (int j = j_temp; j < inp_arrs.Length; j++)
-                {
-                    //Console.WriteLine("Compare " + pat_arrs[i] + " -- " + inp_arrs[j]);
-                    if (pat_arrs[i] == inp_arrs[j])
+                    else if (match_comp6.Success || match_comp7.Success)
                     {
-                        j_temp = j;
-                        match_cnt++;
-                        //Console.WriteLine("Found ");
-                        break;
+                        // TEST CASE 6,7) Check not support resolution is erased / not erased
+                        Console.WriteLine("CASE 6,7) String " + input);
+                    }
+                    else if (match_comp8.Success)
+                    {
+                        // TEST CASE 8) Check INFO key is invalid
+                        Console.WriteLine("CASE 8) String " + input);
                     }
                 }
             }
-
-            int match_perc = match_cnt * 100 / pat_arrs.Length;
-            //Console.WriteLine("Percentage : " + match_perc);
-            if (match_perc >= 80)
-                ret = true;
-
-            ImageHandler.OperationDialog_updLog("<OCR Post-processing> OCR Accuracy : " + match_perc.ToString() + "%", Color.White);
             return ret;
         }
         #endregion
@@ -1421,7 +1440,7 @@ namespace Test
                         Thread.Sleep(5000);
                     }
 
-                    source = SourcePostProcessing(ImageHandler.ExtractText(ImageHandler.EN_OCR_ITEM.OCR_ITEM_SOURCE));
+                    source = CurrentInput(ImageHandler.ExtractText(ImageHandler.EN_OCR_ITEM.OCR_ITEM_SOURCE));
 
                     if ((int)source == (int)EN_INPUT_LIST.EN_INPUT_MAX)
                     {                        
@@ -1430,7 +1449,7 @@ namespace Test
                         if (tryAgain == 3)
                         {
                             ImageHandler.OperationDialog_updLog("<KEY> Press BACK", Color.White);
-                            ImageHandler.OperationDialog_updLog("Unable to find anything. Attempting to test again...", Color.White);
+                            ImageHandler.OperationDialog_updLog("Unable to find anything. Selecting current source and attempting to find again...", Color.White);
                             sourceflag = true;
                             tryAgain = 0;
                             IR_sendCommand(IrFormat, "BACK");
@@ -1454,7 +1473,7 @@ namespace Test
                         Thread.Sleep(3000);
                         int sourceReCheck = 100;
                         ImageHandler.OperationDialog_updLog("Rechecking if still in source menu...", Color.White);
-                        while (sourceReCheck == (int)SourcePostProcessing(ImageHandler.ExtractText(ImageHandler.EN_OCR_ITEM.OCR_ITEM_SOURCE)))
+                        while (sourceReCheck == (int)CurrentInput(ImageHandler.ExtractText(ImageHandler.EN_OCR_ITEM.OCR_ITEM_SOURCE)))
                         {
                             ImageHandler.OperationDialog_updLog("Still in source menu...", Color.White);
                             ImageHandler.OperationDialog_updLog("<KEY> Press OK", Color.White);
@@ -1488,64 +1507,6 @@ namespace Test
                 MessageBox.Show("COM port cannot find, please manually reassign correct COM port.");
             }
             return ret;
-        }
-
-        private EN_INPUT_LIST SourcePostProcessing(string input)
-        {
-            EN_INPUT_LIST output = EN_INPUT_LIST.EN_INPUT_MAX;
-            string OCRstr = "None";
-            Console.WriteLine(input);
-            if (Regex.Match(input, @"CAST|ST|CAS").Success)
-            {
-                output = EN_INPUT_LIST.EN_INPUT_CAST;
-                OCRstr = "CAST";
-            }
-            else if (Regex.Match(input, @"TV").Success)
-            {
-                output = EN_INPUT_LIST.EN_INPUT_TV;
-                OCRstr = "TV";
-            }
-            else if (Regex.Match(input, @"HDMIl|HDMI1|I1|1|MII|MIL|IL|II").Success)
-            {
-                output = EN_INPUT_LIST.EN_INPUT_HDMI1;
-                OCRstr = "HDMI1";
-            }
-            else if (Regex.Match(input, @"HDMI2|I2|2|HDMIZ|IHDMIz|IZ").Success)
-            {
-                output = EN_INPUT_LIST.EN_INPUT_HDMI2;
-                OCRstr = "HDMI2";
-            }
-            else if (Regex.Match(input, @"HDMI3|I3|3").Success)
-            {
-                output = EN_INPUT_LIST.EN_INPUT_HDMI3;
-                OCRstr = "HDMI3";
-            }
-            else if (Regex.Match(input, @"HDMI4|I4|4").Success)
-            {
-                output = EN_INPUT_LIST.EN_INPUT_HDMI4;
-                OCRstr = "HDMI4";
-            }
-            else if (Regex.Match(input, @"Video|Vdeo|deo").Success)
-            {
-                output = EN_INPUT_LIST.EN_INPUT_VIDEO;
-                OCRstr = "Video";
-            }
-            else if (Regex.Match(input, @"PC").Success)
-            {
-                output = EN_INPUT_LIST.EN_INPUT_PC;
-                OCRstr = "PC";
-            }
-            else if (Regex.Match(input, @"USB|sb|us").Success)
-            {
-                output = EN_INPUT_LIST.EN_INPUT_USB;
-                OCRstr = "USB";
-            }
-            else
-            {
-                output = EN_INPUT_LIST.EN_INPUT_MAX; // Case cannot find anything
-            }
-            ImageHandler.OperationDialog_updLog("<OCR Post-processing> Source : " + OCRstr, Color.White);
-            return output;
         }
 
         private EN_INPUT_LIST CurrentInput(string input)

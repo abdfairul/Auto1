@@ -47,8 +47,13 @@ namespace Test
 
         private class RowIndexData
         {
-            // index, value
+            /// <summary>
+            /// hdmi_key, hdmi_value, hdmi_raw
+            /// </summary>
             public Triplet<int, string, string> HDMIFormat;
+            /// <summary>
+            /// color_key, color_value, color_raw
+            /// </summary>
             public Triplet<int, string, string> colorSpace;
             public KeyValuePair<int, string> operation;
             public KeyValuePair<int, string> expected;
@@ -62,17 +67,17 @@ namespace Test
             }
         }
 
-        private class Triplet<I, J, K>
+        private class Triplet<A, B, C>
         {
-            public Triplet(I i, J j, K k)
+            public Triplet(A a, B b, C c)
             {
-                vI = i;
-                vJ = j;
-                vK = k;
+                vA = a;
+                vB = b;
+                vC = c;
             }
-            public I vI { get; set; }
-            public J vJ { get; set; }
-            public K vK { get; set; }
+            public A vA { get; set; }
+            public B vB { get; set; }
+            public C vC { get; set; }
         }
 
         private struct DeviceSettings
@@ -85,17 +90,42 @@ namespace Test
 
         private class ProgressBarStuff
         {
+            private const int Period1stRow = 6; // in secs
             private Stopwatch rowStopwatch = new Stopwatch();
             private Stopwatch totalStopwatch = new Stopwatch();
             private BackgroundWorker bgWorker;
             private ProgressBar progressBar = new ProgressBar();
-            private System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
+            private System.Timers.Timer timer = new System.Timers.Timer();
+            private System.Timers.Timer timerForceRefresh = new System.Timers.Timer();
+
             private List<Triplet<int, int, string>> rowindexTimeName = new List<Triplet<int, int, string>>();
             private int totalEstTime = 0;
             private bool bgCompleted = false;
 
             public string logger = string.Empty;
             public bool CancellationPending = false;
+
+            public Bitmap camLiveImage
+            {
+                set
+                {
+                    progressBar.camPictureBox.Image?.Dispose();
+                    progressBar.camPictureBox.Image = value;
+                }
+            }
+            
+            public Bitmap refImage
+            {
+                set
+                {
+                    progressBar.refPictureBox.Image?.Dispose();
+                    progressBar.refPictureBox.Image = value;
+                }
+                get
+                {
+                    return (Bitmap)progressBar.refPictureBox.Image;
+                }
+            }
 
             public ProgressBarStuff(ref BackgroundWorker bgW)
             {
@@ -113,12 +143,49 @@ namespace Test
                     CancellationPending = true;
                     Reset();
                 };
+
+                bgWorker.RunWorkerCompleted += (sender, args) =>
+                {
+                    bgCompleted = true;
+                    timer.Enabled = false;
+                };
+
+                timer.Interval = 1000;
+                timerForceRefresh.Interval = 100;
+
+                timer.Elapsed += (sender, args) =>
+                {
+                    var elapsed = (int)((double)totalStopwatch.ElapsedMilliseconds / 1000);
+                    Console.WriteLine("Total estimated (s): " + totalEstTime);
+                    var remaining = totalEstTime - elapsed;
+                    Console.WriteLine("Total remaining (s): " + remaining);
+                    Console.WriteLine("Time elapsed (s): " + elapsed);
+                    var percent = (double)elapsed / totalEstTime * 100;
+                    percent = percent > 99 ? 99 : percent;
+                    remaining = remaining < 1 ? 1 : remaining;
+
+                    var someString = new[] { remaining.ToString(), logger };
+
+                    if (bgWorker != null && !bgCompleted)
+                    {
+                        bgWorker.ReportProgress((int)percent, someString);
+                    }
+                };
+
+                timerForceRefresh.Elapsed += (sender, args) =>
+                {
+                    progressBar.camPictureBox.Invoke(new Action((() => progressBar.camPictureBox.Refresh())));
+                };
+
             }
 
             public void Reset()
             {
                 timer.Enabled = false;
                 timer.Stop();
+                timerForceRefresh.Enabled = false;
+                timerForceRefresh.Stop();
+
                 progressBar.total_time.Text = ".....";
                 progressBar.progressBar1.Value = 0;
                 progressBar.Close();
@@ -134,9 +201,9 @@ namespace Test
 
                 foreach (var i in rowindexTimeName)
                 {
-                    if (i.vI == iterationIndex)
+                    if (i.vA == iterationIndex)
                     {
-                        return i.vK;
+                        return i.vC;
                     }
                 }
 
@@ -152,17 +219,15 @@ namespace Test
                 var expectedTime = 0;
                 foreach (var i in rowindexTimeName)
                 {
-                    if (i.vI == iterationIndex)
+                    if (i.vA == iterationIndex)
                     {
-                        expectedTime = i.vJ * 1000;
+                        expectedTime = i.vB * 1000;
                         break;
                     }
                 }
 
                 var differenceInTime = rowTime - expectedTime;
                 totalEstTime += (int)((double)differenceInTime / 1000);
-
-
             }
 
             public void ProgressBarChangedEvent(object sender, ProgressChangedEventArgs e)
@@ -193,40 +258,15 @@ namespace Test
 
                     // 1.1 to add little leverage
                     if (str.Contains("The image is seen for 3 minutes."))
-                        rowindexTimeName.Add(new Triplet<int, int, string>(i, (int)((double)((ImageHandler.SimilarityTestPeriod * 1.1) / 1000)), name));
+                        rowindexTimeName.Add(new Triplet<int, int, string>(i, 
+                            (int)((double)((ImageHandler.SimilarityTestPeriod * 1.1) / 1000)), name));
                     else
-                        rowindexTimeName.Add(new Triplet<int, int, string>(i, (int)((1 * 1.1)), name)); // assume 1 sec
+                        rowindexTimeName.Add(new Triplet<int, int, string>(i, 
+                            (int)((Period1stRow * 1.1)), name));
                 }
 
                 foreach (var i in rowindexTimeName)
-                    totalEstTime += i.vJ;
-
-                timer.Interval = 1000;
-
-                bgWorker.RunWorkerCompleted += (sender, args) =>
-                {
-                    bgCompleted = true;
-                    timer.Enabled = false;
-                };
-
-                timer.Tick += (sender, args) =>
-                {
-                    var elapsed = (int)((double)totalStopwatch.ElapsedMilliseconds / 1000);
-                    Console.WriteLine("Total estimated (s): " + totalEstTime);
-                    var remaining = totalEstTime - elapsed;
-                    Console.WriteLine("Total remaining (s): " + remaining);
-                    Console.WriteLine("Time elapsed (s): " + elapsed);
-                    var percent = (double)elapsed / totalEstTime * 100;
-                    percent = percent > 99 ? 99 : percent;
-                    remaining = remaining < 1 ? 1 : remaining;
-
-                    var someString = new[] { remaining.ToString(), logger };
-
-                    if (bgWorker != null && !bgCompleted)
-                    {
-                        bgWorker.ReportProgress((int)percent, someString);
-                    }
-                };
+                    totalEstTime += i.vB;
 
                 var ownerForm = owner as Form;
                 ownerForm.Invoke(new Action(() =>
@@ -238,6 +278,9 @@ namespace Test
                     totalStopwatch.Start();
                     timer.Enabled = true;
                     timer.Start();
+
+                    timerForceRefresh.Enabled = true;
+                    timerForceRefresh.Start();
                 }));
             }
         }
@@ -875,10 +918,10 @@ namespace Test
         private string[] _SaveImagesToOutputFolder(Bitmap[] images, string rowName)
         {
             // create folder in exe level
-            var current_app_path = Environment.CurrentDirectory;
+            var tempPath = Path.GetTempPath();
 
             // create output folder
-            var outputFolder = current_app_path + "\\output";
+            var outputFolder = tempPath + "FunaiAutomation\\output";
             if (!Directory.Exists(outputFolder))
                 Directory.CreateDirectory(outputFolder);
 
@@ -906,6 +949,11 @@ namespace Test
             return new[] { imagesFolder, _executionTime };
         }
 
+
+
+        private string previousColor = "";
+
+
         private void DataRowProcess()
         {
             if (progressBarStuff.CancellationPending)
@@ -915,16 +963,39 @@ namespace Test
 
             CollectRowIndexData();
 
+            
+
             //send commands
             if (!testUARTBypass)
             {
-                SendCommandSetFormat(_rowIndexData.HDMIFormat.vJ);
-                Thread.Sleep(50);
-                SendCommandSetColorSpace(_rowIndexData.colorSpace.vJ);
+                SendCommandSetFormat(_rowIndexData.HDMIFormat.vB);
+                Thread.Sleep(1000);
+                SendCommandSetColorSpace(_rowIndexData.colorSpace.vB);
+                Thread.Sleep(1000);
             }
+
+            // wait for TV to start
+            Thread.Sleep(3000);
+
             // process result
             // get current frame image
-            var currentImage = ImageHandler.CurrentFrame;
+
+            var currentImage = new Bitmap(ImageHandler.CurrentFrame);
+
+            if (!previousColor.Equals(_rowIndexData.colorSpace.vB))
+            {
+                currentImage.Tag = "Time taken: " + DateTime.Now;
+                var refBitmap = new Bitmap(currentImage) {Tag = currentImage.Tag};
+                progressBarStuff.refImage = refBitmap;
+            }
+            else
+            {
+                currentImage.Dispose();
+                currentImage = new Bitmap(progressBarStuff.refImage) {Tag = progressBarStuff.refImage.Tag};
+            }
+
+            previousColor = _rowIndexData.colorSpace.vB;
+
             Action okAction = () =>
             {
                 toExecute.Cells[(int)RowIndex.Result].Value = "OK";
@@ -960,6 +1031,7 @@ namespace Test
                 if (blackPercent > blackPixelThreshold)
                 {
                     ImageHandler.drawWatermark(ref currentImage, @"Reference image");
+                    ImageHandler.drawWatermark(ref currentImage, currentImage.Tag as string, 18, new Size(0, currentImage.Height - 20));
                     ImageHandler.drawWatermark(ref binaryImage, @"Problematic image from Binary Test : ( " + blackPercent + "% Black pixels )");
                     ngAction(new[] { currentImage, binaryImage }, binaryImage);
                 }
@@ -978,18 +1050,17 @@ namespace Test
 
                 progressBarStuff.logger = "Test #[" + rowName + "] : Checking image for blurriness and disorder...";
 
-                var refBitmap = new Bitmap(ResWidth, ResHeight);
                 var problematicBitmap = new Bitmap(ResWidth, ResHeight);
                 var errorInfo = new object();
                 var processInfo = new object();
 
-                var testResult = ImageHandler.RunSimilarityAndBlurryCheck(ref refBitmap, ref problematicBitmap,
+                var testResult = ImageHandler.RunSimilarityAndBlurryCheck(currentImage, ref problematicBitmap,
                     ref errorInfo, ref processInfo, ref progressBarStuff.CancellationPending);
                 //- check no blurry, no disorder. use blurry algo, and compare image
 
                 if (progressBarStuff.CancellationPending)
                 {
-                    refBitmap.Dispose();
+                    currentImage.Dispose();
                     problematicBitmap.Dispose();
                     return;
                 }
@@ -1001,7 +1072,9 @@ namespace Test
                     var str = (!bools[0]) ? @"Similarity Test" : @"Blurry Test";
                     var info = processInfo as int[];
 
-                    ImageHandler.drawWatermark(ref refBitmap, @"Reference image");
+                    ImageHandler.drawWatermark(ref currentImage, @"Reference image");
+                    ImageHandler.drawWatermark(ref currentImage, currentImage.Tag as string, 18, new Size(0, currentImage.Height - 20));
+                    ImageHandler.drawWatermark(ref problematicBitmap, problematicBitmap.Tag as string, 18, new Size(0, problematicBitmap.Height - 20));
 
                     if (!bools[0])
                         ImageHandler.drawWatermark(ref problematicBitmap,
@@ -1009,12 +1082,14 @@ namespace Test
                     else
                         ImageHandler.drawWatermark(ref problematicBitmap,
                             @"Problematic image from Blurry Test: " + "( " + info[4] + " )");
-                    ngAction(new[] { refBitmap, problematicBitmap }, problematicBitmap);
+
+
+                    ngAction(new[] { currentImage, problematicBitmap }, problematicBitmap);
                 }
                 else
                     okAction();
 
-                refBitmap.Dispose();
+                currentImage.Dispose();
                 problematicBitmap.Dispose();
             }
 
@@ -1349,6 +1424,7 @@ namespace Test
         private void InvokeProgressBarChangedEvent(object sender, ProgressChangedEventArgs e)
         {
             progressBarStuff.ProgressBarChangedEvent(sender, e);
+            progressBarStuff.camLiveImage = ImageHandler.CurrentFrame;
         }
 
         private void CollectRowIndexData()
@@ -1365,9 +1441,9 @@ namespace Test
             HdmiFormatDictionary.Add("32", "HDMI032");
             HdmiFormatDictionary.Add("34", "HDMI034");
 
-            var hdmi_key = _rowIndexData.HDMIFormat.vI;
-            var hdmi_value = _rowIndexData.HDMIFormat.vJ;
-            var hdmi_raw = _rowIndexData.HDMIFormat.vK;
+            var hdmi_key = _rowIndexData.HDMIFormat.vA;
+            var hdmi_value = _rowIndexData.HDMIFormat.vB;
+            var hdmi_raw = _rowIndexData.HDMIFormat.vC;
 
             var current_hdmi_raw = toExecute.Cells[hdmi_key].Value.ToString();
 
@@ -1383,9 +1459,9 @@ namespace Test
                     hdmi_value = HdmiFormatDictionary[m.Value];
             }
 
-            _rowIndexData.HDMIFormat.vI = hdmi_key;
-            _rowIndexData.HDMIFormat.vJ = hdmi_value;
-            _rowIndexData.HDMIFormat.vK = hdmi_raw;
+            _rowIndexData.HDMIFormat.vA = hdmi_key;
+            _rowIndexData.HDMIFormat.vB = hdmi_value;
+            _rowIndexData.HDMIFormat.vC = hdmi_raw;
 
             // add color space
             var colorSpaces = new List<string>();
@@ -1394,9 +1470,9 @@ namespace Test
             colorSpaces.Add("4:2:2");
             colorSpaces.Add("RGB");
 
-            var color_key = _rowIndexData.colorSpace.vI;
-            var color_value = _rowIndexData.colorSpace.vJ;
-            var color_raw = _rowIndexData.colorSpace.vK;
+            var color_key = _rowIndexData.colorSpace.vA;
+            var color_value = _rowIndexData.colorSpace.vB;
+            var color_raw = _rowIndexData.colorSpace.vC;
 
             var current_color_raw = toExecute.Cells[color_key].Value.ToString();
 
@@ -1418,9 +1494,9 @@ namespace Test
                 }
             }
 
-            _rowIndexData.colorSpace.vI = color_key;
-            _rowIndexData.colorSpace.vJ = color_value;
-            _rowIndexData.colorSpace.vK = color_raw;
+            _rowIndexData.colorSpace.vA = color_key;
+            _rowIndexData.colorSpace.vB = color_value;
+            _rowIndexData.colorSpace.vC = color_raw;
 
             _rowIndexData.operation = new KeyValuePair<int, string>(_rowIndexData.operation.Key,
                 toExecute.Cells[_rowIndexData.operation.Key].Value.ToString());
@@ -1431,6 +1507,7 @@ namespace Test
         private void InvokeAfterExecute()
         {
             progressBarStuff.Reset();
+            previousColor = "";
             _rowIndexData = new RowIndexData();
         }
 
@@ -1445,7 +1522,7 @@ namespace Test
             if (paths == null || paths.Length == 0)
                 return;
 
-            if (paths[0].ToString().Contains(Environment.CurrentDirectory))
+            if (paths[0].Contains(Path.GetTempPath()))
             {
                 var imageviewer = new PictureViewer(paths[0], paths[1]);
                 imageviewer.Text = paths[0];
