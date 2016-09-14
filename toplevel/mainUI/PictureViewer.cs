@@ -102,6 +102,8 @@ namespace mainUI
             this.pictureBox1.SizeMode = System.Windows.Forms.PictureBoxSizeMode.StretchImage;
             this.pictureBox1.TabIndex = 0;
             this.pictureBox1.TabStop = false;
+            pictureBox1.Width = 400;
+            pictureBox1.Height = 300;
             // 
             // button1
             // 
@@ -197,8 +199,6 @@ namespace mainUI
         private void showImage(string path)
         {
             Image imgtemp = Image.FromFile(path);
-            pictureBox1.Width = imgtemp.Width / 2;
-            pictureBox1.Height = imgtemp.Height / 2;
             pictureBox1.Image = imgtemp;
             currentImageName.Text = Path.GetFileName(path);
         }

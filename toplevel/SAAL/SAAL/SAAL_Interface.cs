@@ -64,6 +64,7 @@ using Emgu.CV.CvEnum;
 using Emgu.CV.Structure;
 using Emgu.Util;
 using IrToyLibrary;
+using DirectShowLib;
 
 namespace SAAL
 {
@@ -148,6 +149,14 @@ namespace SAAL
         public IRTOYRC[] NECINDIA = new IRTOYRC[255];
         public IRTOYRC[] NECNEW = new IRTOYRC[255];
         public IRTOYRC[] SANYO = new IRTOYRC[255];
+
+        public enum EN_MODEL_TYPE
+        {
+            EN_MODEL_JUSTTV,
+            EN_MODEL_SMARTTV,
+            EN_MODEL_CASTTV,
+            EN_MODEL_MAX
+        }
 
         #region LG3803
         /* SAAL for LG3803 */
@@ -789,9 +798,10 @@ namespace SAAL
             }
             catch (IrToyException ex)
             {
-                MessageBox.Show(ex.Message);
-                throw;
+                //MessageBox.Show(ex.Message);
+                
             }
+            
         }
 
         public void IRTOYS_CloseCon()
@@ -914,8 +924,10 @@ namespace SAAL
                 //try
                 //{
                 IRToyObj.Send(IRToyRAWKey.ToLower());
-                Task.Delay(500);
-                IRToyObj.Send("00 00 ff ff"); // Reset     
+                IRTOYS_CloseCon();
+                Thread.Sleep(3000);
+                //IRToyObj.Send("00 00 ff ff"); // Reset     
+                
                 //}
                 //catch
                 //{
@@ -924,11 +936,11 @@ namespace SAAL
                 //    ret = false;
                 //    throw;
                 //}
-                
-                Task.Delay(500);
+
+                //Task.Delay(500);
 
                 IRToy_semkey = true;
-                IRTOYS_CloseCon();
+                
             }
             return ret;
         }
@@ -953,11 +965,11 @@ namespace SAAL
          */
         public Boolean CAM_GetCAMList(out string[] CamList)
         {
-            videoDevice = new FilterInfoCollection(FilterCategory.VideoInputDevice);
+            videoDevice = new FilterInfoCollection(AForge.Video.DirectShow.FilterCategory.VideoInputDevice);
             string[] mycamlist = new string[videoDevice.Count];
             Int32 index = 0;
 
-            foreach (FilterInfo device in videoDevice)
+            foreach (AForge.Video.DirectShow.FilterInfo device in videoDevice)
             {
                 mycamlist[index] = device.Name;
                 index++;
@@ -977,8 +989,8 @@ namespace SAAL
         {
             Int32 index = 0;
 
-            videoDevice = new FilterInfoCollection(FilterCategory.VideoInputDevice);
-            foreach (FilterInfo device in videoDevice)
+            videoDevice = new FilterInfoCollection(AForge.Video.DirectShow.FilterCategory.VideoInputDevice);
+            foreach (AForge.Video.DirectShow.FilterInfo device in videoDevice)
             {
                 if (device.Name == cam_name)
                 {
@@ -1011,9 +1023,11 @@ namespace SAAL
             Int32 index = 0;
             IsVideoConnected = false;
             CvInvoke.UseOpenCL = false;
+            //videoDevice = new FilterInfoCollection(FilterCategory.VideoInputDevice);
+            DsDevice[] _SystemCamereas = DsDevice.GetDevicesOfCat(DirectShowLib.FilterCategory.VideoInputDevice);
+            //CaptureCollection videoDevice_cv = new CaptureCollection();
 
-            videoDevice = new FilterInfoCollection(FilterCategory.VideoInputDevice);
-            foreach (FilterInfo device in videoDevice)
+            foreach (DsDevice device in _SystemCamereas)
             {
                 if (device.Name == cam_name)
                 {
@@ -1022,7 +1036,7 @@ namespace SAAL
                         IsVideoConnected = true;
                         if (videoDisplay_cv != null)
                             videoDisplay_cv.Dispose();
-                        videoDisplay_cv = new Emgu.CV.Capture();
+                        videoDisplay_cv = new Emgu.CV.Capture(index);
                     }
                     catch (NullReferenceException)
                     {
@@ -1983,8 +1997,14 @@ tested (2) go to preference of the instrument to change either storage or COM on
             else if (inpStr.Contains("1080 60P"))
                 cmdStr += (int)EnumListUser.EN_TG45_59_FORMAT.HDTV_1080_60p;
 
+            else if (inpStr.Contains("HDMI001"))
+                cmdStr += (int)EnumListUser.EN_TG45_59_FORMAT.HDMI_640x480p_60_4_3;
+
             else if (inpStr.Contains("HDMI002"))
                 cmdStr += (int)EnumListUser.EN_TG45_59_FORMAT.HDMI_640x480p_60_4_3;
+
+            else if (inpStr.Contains("HDMI003"))
+                cmdStr += (int)EnumListUser.EN_TG45_59_FORMAT.HDMI_720x480p_60_16_9;
 
             else if (inpStr.Contains("HDMI004"))
                 cmdStr += (int)EnumListUser.EN_TG45_59_FORMAT.HDMI_1280x720p_60_16_9;
@@ -1995,13 +2015,16 @@ tested (2) go to preference of the instrument to change either storage or COM on
             else if (inpStr.Contains("HDMI006"))
                 cmdStr += (int)EnumListUser.EN_TG45_59_FORMAT.HDMI_2880x480i_60_4_3;
 
-            else if (inpStr.Contains("HDMI16"))
+            else if (inpStr.Contains("HDMI007"))
+                cmdStr += (int)EnumListUser.EN_TG45_59_FORMAT.HDMI_720_1440_x480i_60_16_9;
+
+            else if (inpStr.Contains("HDMI016"))
                 cmdStr += (int)EnumListUser.EN_TG45_59_FORMAT.HDMI_1920x1080p_60_16_9;
 
-            else if (inpStr.Contains("HDMI32"))
+            else if (inpStr.Contains("HDMI032"))
                 cmdStr += (int)EnumListUser.EN_TG45_59_FORMAT.HDMI_1920x1080p_23_97_24_16_9;
 
-            else if (inpStr.Contains("HDMI34"))
+            else if (inpStr.Contains("HDMI034"))
                 cmdStr += (int)EnumListUser.EN_TG45_59_FORMAT.HDMI_1920x1080p_29_97_30_16_9;
             
             cmdStr += "\n";
@@ -2184,6 +2207,50 @@ tested (2) go to preference of the instrument to change either storage or COM on
             }
         }
 
+        /*  Function:       PUP_Test()
+         *  Parameters:     Input - None
+         *  Description:    Test either the PUP is connected or not if connected will return it's COM ID.
+         *                  if not connected wil return null
+         */
+        public String PUP_Test()
+        {
+            String Manufacturer;
+            String DeviceID;
+            ManagementObjectSearcher searcher =
+                   new ManagementObjectSearcher("root\\CIMV2",
+                   "SELECT * FROM WIN32_SerialPort");
+
+            int i = 0;
+            foreach (ManagementObject queryObj in searcher.Get())
+            {
+                Console.WriteLine("-----------------------------------");
+                Console.WriteLine("SerialPort WMI " + i);
+                Console.WriteLine("-----------------------------------");
+                Console.WriteLine("Caption: {0}", queryObj["Caption"]);
+                Console.WriteLine("Description: {0}", queryObj["Description"]);
+                //Console.WriteLine("DeviceID: {0}", queryObj["DeviceID"]);
+                //Console.WriteLine("Manufacturer: {0}", queryObj["Manufacturer"]); not manufacturer it's Caption
+                //Console.WriteLine("Name: {0}", queryObj["Name"]);
+                //Console.WriteLine("PNPDeviceID: {0}", queryObj["PNPDeviceID"]);
+
+                Console.WriteLine();
+                Console.WriteLine();
+                Manufacturer = queryObj["Caption"].ToString();
+                DeviceID = queryObj["DeviceID"].ToString();
+                Console.WriteLine(Manufacturer);
+
+                Regex regex = new Regex(@"Microchip Technology, Inc.");
+                Match match = regex.Match(Manufacturer);
+                i++;
+                if (match.Success)
+                {
+                    return DeviceID;
+                }
+
+            }
+            return null;
+        }
+
         /* End Of - SAAL for Plug Unplug */
         #endregion
 
@@ -2199,17 +2266,25 @@ tested (2) go to preference of the instrument to change either storage or COM on
         {
             UART_PORT.PortName = setup;
             UART_PORT.BaudRate = baudrate;
-            UART_PORT.Open();
 
-            if (!UART_PORT.IsOpen)
+            try
+            {
+                UART_PORT.Open();// sometime when hotplug the device the name still there but not refesh.
+
+                if (!UART_PORT.IsOpen)
+                {
+                    return false;
+                }
+                else
+                {
+                    string weather_spoon = "WEATHER_SPOON 1\r\n";
+                    UART_PORT.Write(weather_spoon);
+                    return true;
+                }
+            }
+            catch(Exception)
             {
                 return false;
-            }
-            else
-            {
-                string weather_spoon = "WEATHER_SPOON 1\r\n";
-                UART_PORT.Write(weather_spoon);
-                return true;
             }
         }
 

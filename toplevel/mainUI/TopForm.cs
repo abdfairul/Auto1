@@ -548,6 +548,8 @@ namespace mainUI
                     List<string> resultToSave = new List<string>();
                     List<string> testerToSave = new List<string>();
                     List<string> verToSave = new List<string>();
+                    List<string> dateToSave = new List<string>();
+                    List<string> remarkToSave = new List<string>();
 
                     //dtToSave.Columns.Add();
 
@@ -557,6 +559,8 @@ namespace mainUI
                         int pointToSaveRes = 0;
                         int pointToSaveVer = 0;
                         int pointToSaveTester = 0;
+                        int pointToSaveDate = 0;
+                        int pointToSaveRemark = 0;
                         for (int i = 0; i < dataGridView.Rows.Count - 1; i++)
                         {
                             DataGridViewRow row = dataGridView.Rows[i];
@@ -580,6 +584,14 @@ namespace mainUI
                                     {
                                         pointToSaveTester = j;
                                     }
+                                    else if (row.Cells[j].Value.ToString() == "Date" || row.Cells[j].Value.ToString() == "Test Date")
+                                    {
+                                        pointToSaveDate = j;
+                                    }
+                                    else if (row.Cells[j].Value.ToString() == "Remark" || row.Cells[j].Value.ToString() == "Remarks")
+                                    {
+                                        pointToSaveRemark = j;
+                                    }
                                 }
                             }
 
@@ -598,11 +610,13 @@ namespace mainUI
                                 resultToSave.Add(row.Cells[pointToSaveRes].Value.ToString());
                                 verToSave.Add(row.Cells[pointToSaveVer].Value.ToString());
                                 testerToSave.Add(row.Cells[pointToSaveTester].Value.ToString());
+                                dateToSave.Add(row.Cells[pointToSaveDate].Value.ToString());
+                                remarkToSave.Add(row.Cells[pointToSaveRemark].Value.ToString());
                                 //dtToSave.Rows.Add(row.Cells[j].Value);
                             }
                         }
                     }));
-                    ExcelBind.save_data(noToSave, resultToSave, verToSave, testerToSave);
+                    ExcelBind.save_data(noToSave, resultToSave, verToSave, testerToSave, dateToSave, remarkToSave);
                 }
                 e.Result = "save";
             }

@@ -50,11 +50,13 @@ namespace Test
         private EN_INPUT_LIST cur_input = EN_INPUT_LIST.EN_INPUT_MAX;
         private string _executionTime;
         private Bitmap NGImage = null;
+        private Bitmap OKImage = null;
         private int noOfRow;
         private int noOfRowTemp;
+        private double elapsedTime;
 
         // Change to true when running specific test
-        private Boolean testUARTBypass = true;
+        private Boolean testUARTBypass = false;
         private Boolean testImageBypass = false;
 
         private enum EN_ID_TIMER
@@ -62,6 +64,7 @@ namespace Test
             ID_TIMER_CLEAR_DICT,
             ID_TIMER_CONFIG_MENU,
             ID_TIMER_IR_MENU,
+            ID_TIMER_OPERATION,
             ID_TIMER_MAX
         }
 
@@ -194,11 +197,11 @@ namespace Test
             test_mode = EN_TEST_MODE.TEST_MODE_MAX;
             con_state = EN_CON_METHOD.CON_MAX;
 
-            TestConnection();
+            //TestConnection();
             BusyFlag = false;
 
             // Instantiate timer
-            _timer = new System.Timers.Timer();
+            //_timer = new System.Timers.Timer();
 
             ImageHandler.IsEnOCR = true;
             ImageHandler.IsEnBlurryCheck = true;
@@ -227,15 +230,18 @@ namespace Test
 
             // Init for Camera
             Saal.CAM_GetCAMList(out cameras);
-            ImageHandler.CamName = cameras[0]; // set camera device
-            ImageHandler.ImgFromParent = pictureBox; // send picture box control
-            ImageHandler.InitCamera(); // start camera
-
-            foreach (string cam in cameras)
+            if (cameras.Length > 0)
             {
-                cbCamList.Items.Add(cam);
+                ImageHandler.CamName = cameras[0]; // set camera device
+                ImageHandler.ImgFromParent = pictureBox; // send picture box control
+                ImageHandler.InitCamera(); // start camera
+
+                foreach (string cam in cameras)
+                {
+                    cbCamList.Items.Add(cam);
+                }
+                cbCamList.SelectedIndex = 0;
             }
-            cbCamList.SelectedIndex = 0;
         }
         #endregion
 
@@ -578,14 +584,16 @@ namespace Test
         // Camera list item click event
         private void cbCamList_SelectedIndexChanged(object sender, EventArgs e)
         {
-            foreach (FilterInfo device in Saal.videoDevice)
+            ImageHandler.CamName = cbCamList.Text;
+            ImageHandler.ImgFromParent = pictureBox;
+            ImageHandler.InitCamera();
+
+            btOnOffCam.BackColor = Color.LightBlue;
+            btOnOffCam.Text = "On";
+            if (Picture.Image != null)
             {
-                if (device.Name == cbCamList.SelectedText)
-                {
-                    ImageHandler.CamName = device.Name;
-                    ImageHandler.ImgFromParent = pictureBox;
-                    ImageHandler.InitCamera();
-                }
+                Picture.Image.Dispose();
+                Picture.Image = null;
             }
         }
 
@@ -848,39 +856,55 @@ namespace Test
         #region Timer Handler
         private void SetTimer(EN_ID_TIMER timerID)
         {
-            if (_timer.Enabled == true)
-                return;
+            if (_timer != null)
+            {
+                if (_timer.Enabled == true)
+                    return;
+                else
+                    _timer.Dispose();
+            }            
 
-            Console.WriteLine("Timer_Handler::SetTimer");
-            //_timer = new System.Timers.Timer();
+            Console.WriteLine("Timer_Handler::SetTimer -> " + timerID.ToString());            
+
+            _timer = new System.Timers.Timer();
 
             switch (timerID) // Set timer for respective timer ID
             {
                 case EN_ID_TIMER.ID_TIMER_CLEAR_DICT:
-                    _timer.Interval = 1000; // 10 sec
+                    _timer.Interval = 1000; // 10 sec                    
+                    _timer.Elapsed += (sender, e) => OnTimedEvent(sender, timerID);
+                    _timer.AutoReset = true;
                     break;
                 case EN_ID_TIMER.ID_TIMER_CONFIG_MENU:
                     _timer.Interval = 500; // 5 sec
+                    _timer.Elapsed += (sender, e) => OnTimedEvent(sender, timerID);
+                    _timer.AutoReset = true;
                     break;
                 case EN_ID_TIMER.ID_TIMER_IR_MENU:
                     _timer.Interval = 500; // 5 sec
+                    _timer.Elapsed += (sender, e) => OnTimedEvent(sender, timerID);
+                    _timer.AutoReset = true;
+                    break;
+                case EN_ID_TIMER.ID_TIMER_OPERATION:
+                    _timer.Interval = 100; // 1 sec
+                    _timer.Elapsed += (sender, e) => OnTimedEvent(sender, timerID);
+                    _timer.AutoReset = true;
                     break;
                 default:
                     _timer.Interval = 100; // 1 sec
                     break;
-            }
+            }            
 
-            _timer.Elapsed -= (sender, e) => OnTimedEvent(sender, e, timerID);
-            _timer.Elapsed += (sender, e) => OnTimedEvent(sender, e, timerID);
-            _timer.AutoReset = true;
             _timer.Enabled = true;
             _timer.Start();
         }
 
-        private void OnTimedEvent(Object sender, ElapsedEventArgs e, EN_ID_TIMER timerID)
-        {
-            if (_timer.Enabled == false)
+        private void OnTimedEvent(Object sender, EN_ID_TIMER timerID)
+        {            
+            if (_timer == null || _timer.Enabled == false)
                 return;
+            
+            Console.WriteLine("Timer_Handler::StopTimer -> " + timerID.ToString());
 
             switch (timerID)
             {
@@ -891,6 +915,8 @@ namespace Test
                     {
                         _validateDict[k] = "";
                     }
+                    _timer.Enabled = false;
+                    _timer.Stop();                    
                     break;
                 case EN_ID_TIMER.ID_TIMER_CONFIG_MENU:
                     Console.WriteLine("OnTimedEvent::ID_TIMER_CONFIG_MENU");
@@ -898,9 +924,12 @@ namespace Test
                     {
                         frmConfig.Invoke(new Action(() =>
                         {
-                            frmConfig.Hide();
+                            if(frmConfig.Visible)
+                                frmConfig.Hide();
                         }));
                     }
+                    _timer.Enabled = false;
+                    _timer.Stop();
                     break;
                 case EN_ID_TIMER.ID_TIMER_IR_MENU:
                     Console.WriteLine("OnTimedEvent::ID_TIMER_IR_MENU");
@@ -908,25 +937,28 @@ namespace Test
                     {
                         frmIR.Invoke(new Action(() =>
                         {
-                            frmIR.Hide();
+                            if (frmIR.Visible)
+                                frmIR.Hide();
                         }));
                     }
+                    _timer.Enabled = false;
+                    _timer.Stop();
                     break;
-            }
-
-            Console.WriteLine("Timer_Handler::StopTimer");
-            _timer.Stop();
-            _timer.Enabled = false;
+                case EN_ID_TIMER.ID_TIMER_OPERATION:
+                    elapsedTime++;
+                    break;
+            }                    
         }
 
         private void KillTimer()
         {
-            if (_timer.Enabled == false)
+            if (_timer == null || _timer.Enabled == false)
                 return;
 
             Console.WriteLine("Timer_Handler::KillTimer");
-            _timer.Stop();
+
             _timer.Enabled = false;
+            _timer.Stop();
         }
 
         #endregion
@@ -936,9 +968,16 @@ namespace Test
         {
             bool ret = false;
             bool infoflag = true;
+            int trueCnt = 0;
+            int falseCnt = 0;
             int tryAgain = 0;
             string tempRes = "";
-            NGImage = new Bitmap(ImageHandler.ResSize.Width, ImageHandler.ResSize.Height);
+
+            
+            if (NGImage != null)
+                NGImage.Dispose();
+            if (OKImage != null)
+                OKImage.Dispose();
 
             // ----- Checklist Start -----
             Regex imgResult = new Regex(@"Resolution as (\d*\w*)");
@@ -977,24 +1016,26 @@ namespace Test
                 {
                     if (match_comp1.Success || match_comp2.Success)
                     {
-                        // TEST CASE 1,2) Check resolution is displayed
+                        // TEST CASE #1,#2) Check resolution is displayed
                         if (match_comp1.Success)
                             tempRes = match_comp1.Groups[1].ToString();
                         else
                             tempRes = match_comp2.Groups[1].ToString();
 
                         Console.WriteLine("CASE 1,2) String : " + input + " Resolution : " + tempRes);
-                        
+
+                        // I - Attempting to open Info menu
                         if (infoflag)
-                        {
+                        {                            
                             ImageHandler.OperationDialog_updLog("<KEY> Press INFO", Color.White);
                             ImageHandler.OperationDialog_updLog("Waiting TV to open info menu...", Color.White);
                             IR_sendCommand(IrFormat, "INFO");
                             infoflag = false;
                             Thread.Sleep(5000);
 
-                            // Check if Info menu already open
-                            if (!Regex.Match(ImageHandler.ExtractText(ImageHandler.EN_OCR_ITEM.OCR_ITEM_OPT1), @"Close|Cl|ose|C|se|lo").Success)
+                            // II - Checking if Info menu already opened
+                            ImageHandler.OperationDialog_updLog("Checking if info menu already opened...", Color.White);
+                            if (ImageHandler.ExtractText(ImageHandler.EN_OCR_ITEM.OCR_ITEM_OPT1) != "Close")
                             {
                                 ImageHandler.OperationDialog_updLog("<KEY> Press BACK", Color.White);
                                 ImageHandler.OperationDialog_updLog("Detecting info menu is not opened. Attempting to open again...", Color.White);
@@ -1005,61 +1046,145 @@ namespace Test
                                 infoflag = true;
                                 continue;
                             }
+                            ImageHandler.OperationDialog_updLog("Detecting info menu is opened...", Color.White);
                         }
+
+                        // III - Checking if resolution match with OCR
                         if (ImageHandler.ExtractText(ImageHandler.EN_OCR_ITEM.OCR_ITEM_INFO).Contains(tempRes))
                         {                            
-                            ImageHandler.OperationDialog_updLog("<Result OK>", Color.Green);
+                            OKImage = new Bitmap(ImageHandler.CurrentFrame);
+                            ImageHandler.OperationDialog_updRefCom((Bitmap)OKImage.Clone());
+                            ImageHandler.OperationDialog_updLog("<Result OK> Saving OK Image...", Color.Green);
+                            IR_sendCommand(IrFormat, "BACK");
                             ret = true;
                             break;
                         }
+                        // IV - Attempting to execute OCR again if resolution doesn't match
                         else
                         {
+                            // V - Checking if number of attempts is 15. Stop execution.
                             if (tryAgain != 0 && tryAgain % 15 == 0)
                             {
-                                NGImage = ImageHandler.CurrentFrame;
+                                NGImage = new Bitmap(ImageHandler.CurrentFrame);
                                 ImageHandler.OperationDialog_updRefCom((Bitmap)NGImage.Clone());
                                 ImageHandler.OperationDialog_updLog("<Result NG> Saving NG Image...", Color.Red);
-                                IR_sendCommand(IrFormat, "OK");
+                                IR_sendCommand(IrFormat, "BACK");
                                 break;
                             }
+                            // VI - Checking if number of attempts is 5,10. Reopen Info menu.
                             else if (tryAgain != 0 && tryAgain % 5 == 0)
-                            {
-                                //Console.WriteLine("Press OK key and try again (#" + tryAgain + ")");
-                                ImageHandler.OperationDialog_updLog("OCR failed. Attempting to reopen info menu...", Color.White);
-                                IR_sendCommand(IrFormat, "OK");
+                            {                             
+                                ImageHandler.OperationDialog_updLog("OCR failed. Attempting to reopen info menu and execute OCR (#" + tryAgain + ")...", Color.White);
+                                IR_sendCommand(IrFormat, "BACK");
                                 infoflag = true;
                                 Thread.Sleep(2000);
                             }
-                            ImageHandler.OperationDialog_updLog("Attempting to decode OCR (#" + tryAgain + ")...", Color.White);
+                            // VII - Checking if number of attempts is not 5,10,15. Try OCR again.
+                            else
+                            {
+                                ImageHandler.OperationDialog_updLog("Attempting to execute OCR (#" + tryAgain + ")...", Color.White);
+                            }                           
+                            
                             tryAgain++;
                         }
                     }
                     else if(match_comp3.Success)
                     {
-                        // TEST CASE 3) Check blank resolution is displayed
+                        // TEST CASE #3) Check blank resolution is displayed
                         Console.WriteLine("CASE 3) String " + input);
+
+                        // I - Attempting to open Info menu
+                        if (infoflag)
+                        {
+                            ImageHandler.OperationDialog_updLog("<KEY> Press INFO", Color.White);
+                            ImageHandler.OperationDialog_updLog("Waiting TV to open info menu...", Color.White);
+                            IR_sendCommand(IrFormat, "INFO");
+                            infoflag = false;
+                            Thread.Sleep(5000);
+
+                            // II - Checking if Info menu already opened
+                            ImageHandler.OperationDialog_updLog("Checking if info menu already opened...", Color.White);
+                            if (ImageHandler.ExtractText(ImageHandler.EN_OCR_ITEM.OCR_ITEM_OPT1) != "Close")
+                            {
+                                ImageHandler.OperationDialog_updLog("<KEY> Press BACK", Color.White);
+                                ImageHandler.OperationDialog_updLog("Detecting info menu is not opened. Attempting to open again...", Color.White);
+                                IR_sendCommand(IrFormat, "BACK");
+                                Thread.Sleep(500);
+                                IR_sendCommand(IrFormat, "BACK");
+                                Thread.Sleep(500);
+                                infoflag = true;
+                                continue;
+                            }
+                            ImageHandler.OperationDialog_updLog("Detecting info menu is opened...", Color.White);
+                        }
+
+                        // III - Checking if blank resolution match with OCR
+                        if (ImageHandler.ExtractText(ImageHandler.EN_OCR_ITEM.OCR_ITEM_INFO) == "")
+                        {
+                            OKImage = new Bitmap(ImageHandler.CurrentFrame);
+                            ImageHandler.OperationDialog_updRefCom((Bitmap)OKImage.Clone());
+                            ImageHandler.OperationDialog_updLog("<Result OK> Saving OK Image...", Color.Green);
+                            IR_sendCommand(IrFormat, "BACK");
+                            ret = true;
+                            break;
+                        }
+                        // IV - Attempting to execute OCR again if resolution doesn't match
+                        else
+                        {
+                            // V - Checking if number of attempts is 15. Stop execution.
+                            if (tryAgain != 0 && tryAgain % 15 == 0)
+                            {
+                                NGImage = new Bitmap(ImageHandler.CurrentFrame);
+                                ImageHandler.OperationDialog_updRefCom((Bitmap)NGImage.Clone());
+                                ImageHandler.OperationDialog_updLog("<Result NG> Saving NG Image...", Color.Red);
+                                IR_sendCommand(IrFormat, "BACK");
+                                break;
+                            }
+                            // VI - Checking if number of attempts is 5,10. Reopen Info menu.
+                            else if (tryAgain != 0 && tryAgain % 5 == 0)
+                            {
+                                ImageHandler.OperationDialog_updLog("OCR failed. Attempting to reopen info menu and execute OCR (#" + tryAgain + ")...", Color.White);
+                                IR_sendCommand(IrFormat, "BACK");
+                                infoflag = true;
+                                Thread.Sleep(2000);
+                            }
+                            // VII - Checking if number of attempts is not 5,10,15. Try OCR again.
+                            else
+                            {
+                                ImageHandler.OperationDialog_updLog("Attempting to execute OCR (#" + tryAgain + ")...", Color.White);
+                            }
+
+                            tryAgain++;
+                        }
+
                         break;
                     }
                     else if (match_comp4.Success || match_comp5.Success)
                     {
-                        // TEST CASE 4,5) Check image is displayed or not displayed
-                        Console.WriteLine("CASE 4,5) String " + input);                        
+                        // TEST CASE #4,#5) Check image is displayed or not displayed
+                        Console.WriteLine("CASE 4,5) String " + input);
 
-                        var binaryImage = ImageHandler.GetBinarialImage_Global(ImageHandler.CurrentFrame, 20);
-
+                        // I - Executing binary calculation to get black percentage
+                        var binaryImage = ImageHandler.GetBinarialImage_GlobalCrop(ImageHandler.CurrentFrame, 70);                        
                         double perc = (int)ImageHandler.GetBlackPixelPercentage(binaryImage);
                         ImageHandler.OperationDialog_updLog("<Binarization Process> Black pixel percentage : " + perc + "%", Color.White);
+
+                        // II - Checking if black percentage is higher or lower than threshold
                         if (perc < 40)
                         {
                             Console.WriteLine("White");
-                            if(match_comp4.Success)
+                            // Case OK for image is displayed (#4)
+                            if (match_comp4.Success)
                             {
-                                ImageHandler.OperationDialog_updLog("<Result OK>", Color.Green);
+                                OKImage = new Bitmap(ImageHandler.CurrentFrame);
+                                ImageHandler.OperationDialog_updRefCom((Bitmap)OKImage.Clone());
+                                ImageHandler.OperationDialog_updLog("<Result OK> Saving OK Image...", Color.Green);
                                 ret = true;
                             }
+                            // Case NG for image is not displayed (#5)
                             else
                             {
-                                NGImage = ImageHandler.CurrentFrame;
+                                NGImage = new Bitmap(ImageHandler.CurrentFrame);
                                 ImageHandler.OperationDialog_updRefCom((Bitmap)NGImage.Clone());
                                 ImageHandler.OperationDialog_updLog("<Result NG> Saving NG Image...", Color.Red);
                                 ret = false;
@@ -1068,16 +1193,20 @@ namespace Test
                         else
                         {
                             Console.WriteLine("Black");
+                            // Case NG for image is displayed (#4)
                             if (match_comp4.Success)
                             {
-                                NGImage = ImageHandler.CurrentFrame;
+                                NGImage = new Bitmap(ImageHandler.CurrentFrame);
                                 ImageHandler.OperationDialog_updRefCom((Bitmap)NGImage.Clone());
                                 ImageHandler.OperationDialog_updLog("<Result NG> Saving NG Image...", Color.Red);
                                 ret = false;
                             }
+                            // Case OK for image is not displayed (#5)
                             else
                             {
-                                ImageHandler.OperationDialog_updLog("<Result OK>", Color.Green);
+                                OKImage = new Bitmap(ImageHandler.CurrentFrame);
+                                ImageHandler.OperationDialog_updRefCom((Bitmap)OKImage.Clone());
+                                ImageHandler.OperationDialog_updLog("<Result OK> Saving OK Image...", Color.Green);
                                 ret = true;
                             }
                         }                        
@@ -1085,13 +1214,118 @@ namespace Test
                     }
                     else if (match_comp6.Success || match_comp7.Success)
                     {
-                        // TEST CASE 6,7) Check not support resolution is erased / not erased
+                        // TEST CASE #6,#7) Check not support resolution is erased / not erased
                         Console.WriteLine("CASE 6,7) String " + input);
+
+                        // I - Return to LIVE mode from any menu
+                        ImageHandler.OperationDialog_updLog("<KEY> Press BACK", Color.White);
+                        IR_sendCommand(IrFormat, "BACK");
+                        Thread.Sleep(1000);
+                        ImageHandler.OperationDialog_updLog("<KEY> Press BACK", Color.White);
+                        IR_sendCommand(IrFormat, "BACK");
+                        ImageHandler.OperationDialog_updLog("Waiting OSD label to appear...", Color.White);
+                        Thread.Sleep(10000);
+
+                        if (match_comp6.Success)
+                        {
+                            // CASE 6 - OSD label erased
+                            // II - Checking if resolution match with OCR
+                            if (ImageHandler.ExtractText(ImageHandler.EN_OCR_ITEM.OCR_ITEM_LABEL) == "null")
+                            {
+                                OKImage = new Bitmap(ImageHandler.CurrentFrame);
+                                ImageHandler.OperationDialog_updRefCom((Bitmap)OKImage.Clone());
+                                ImageHandler.OperationDialog_updLog("<Result OK> Saving OK Image...", Color.Green);
+                                ret = true;
+                                break;
+                            }
+                            // III - Attempting to execute OCR again if resolution doesn't match
+                            else
+                            {
+                                // IV - Checking if number of attempts is 15. Stop execution.
+                                if (tryAgain != 0 && tryAgain % 15 == 0)
+                                {
+                                    NGImage = new Bitmap(ImageHandler.CurrentFrame);
+                                    ImageHandler.OperationDialog_updRefCom((Bitmap)NGImage.Clone());
+                                    ImageHandler.OperationDialog_updLog("<Result NG> Saving NG Image...", Color.Red);
+                                    break;
+                                }
+                                ImageHandler.OperationDialog_updLog("Attempting to execute OCR (#" + tryAgain + ")...", Color.White);
+                                tryAgain++;
+                            }
+                        }
+                        else
+                        {
+                            // CASE7 - OSD label not erased
+                            // II - Checking if resolution match with OCR
+                            if (ImageHandler.ExtractText(ImageHandler.EN_OCR_ITEM.OCR_ITEM_LABEL) != "Please change source resolution")
+                            {
+                                OKImage = new Bitmap(ImageHandler.CurrentFrame);
+                                ImageHandler.OperationDialog_updRefCom((Bitmap)OKImage.Clone());
+                                ImageHandler.OperationDialog_updLog("<Result OK> Saving OK Image...", Color.Green);
+                                ret = true;
+                                break;
+                            }
+                            // III - Attempting to execute OCR again if resolution doesn't match
+                            else
+                            {
+                                // IV - Checking if number of attempts is 15. Stop execution.
+                                if (tryAgain != 0 && tryAgain % 15 == 0)
+                                {
+                                    NGImage = new Bitmap(ImageHandler.CurrentFrame);
+                                    ImageHandler.OperationDialog_updRefCom((Bitmap)NGImage.Clone());
+                                    ImageHandler.OperationDialog_updLog("<Result NG> Saving NG Image...", Color.Red);
+                                    break;
+                                }
+                                ImageHandler.OperationDialog_updLog("Attempting to execute OCR (#" + tryAgain + ")...", Color.White);
+                                tryAgain++;
+                            }
+                        }
+
                     }
                     else if (match_comp8.Success)
                     {
                         // TEST CASE 8) Check INFO key is invalid
                         Console.WriteLine("CASE 8) String " + input);
+
+                        // I - Attempting to open Info menu
+                        ImageHandler.OperationDialog_updLog("<KEY> Press INFO", Color.White);
+                        ImageHandler.OperationDialog_updLog("Waiting TV to open info menu...", Color.White);
+                        IR_sendCommand(IrFormat, "INFO");
+                        Thread.Sleep(5000);
+
+                        // II - Checking if number of attempts is 15. Stop execution.
+                        if (tryAgain != 0 && tryAgain % 15 == 0)
+                        {
+                            if(trueCnt > falseCnt)
+                            {
+                                NGImage = new Bitmap(ImageHandler.CurrentFrame);
+                                ImageHandler.OperationDialog_updRefCom((Bitmap)NGImage.Clone());
+                                ImageHandler.OperationDialog_updLog("<Result NG> Saving NG Image...", Color.Red);
+                                IR_sendCommand(IrFormat, "BACK");
+                            }
+                            else
+                            {
+                                OKImage = new Bitmap(ImageHandler.CurrentFrame);
+                                ImageHandler.OperationDialog_updRefCom((Bitmap)OKImage.Clone());
+                                ImageHandler.OperationDialog_updLog("<Result OK> Saving OK Image...", Color.Green);
+                                ret = true;
+                            }
+                            break;
+                        }
+                        tryAgain++;
+
+                        // Checking INFO menu availability
+                        // II - Checking if Info menu already opened
+                        if (ImageHandler.ExtractText(ImageHandler.EN_OCR_ITEM.OCR_ITEM_OPT1) != "Close")
+                        {
+                            ImageHandler.OperationDialog_updLog("Detecting info menu is not opened. Verifying again...", Color.White);
+                            falseCnt++;
+                        }
+                        else
+                        {
+                            ImageHandler.OperationDialog_updLog("Detecting info menu is opened. Verifying again...", Color.White);
+                            trueCnt++;
+                        }
                     }
                 }
             }
@@ -1269,7 +1503,7 @@ namespace Test
                     flagCh = true;
                 else
                 {
-                    // Store previous value into new cell
+                    // Store previous value into new cell, input Error if previous value empty
                     if (pair.Value.ToString() != "")
                         toExecute.Cells[pair.Key].Value = pair.Value;
                     else
@@ -1278,7 +1512,7 @@ namespace Test
 
                 if (toExecute.Cells[pair.Key].Value.ToString() == "#ERROR")
                 {
-                    ImageHandler.OperationDialog_updLog("<Validation Error> Input at column #" + pair.Key + " is empty", Color.White);
+                    ImageHandler.OperationDialog_updLog("<Validation Error> Input at column #" + pair.Key + " is empty. Skipping this row...", Color.White);
                     flagRet = false;
                 }
             }
@@ -1423,6 +1657,7 @@ namespace Test
             bool ret = false;
             bool sourceflag = true;
             int tryAgain = 0;
+            int tryAgainFull = 0;
             if (IR_checkConnection())
             {
                 //Saal.IRTOYS_OpenCon();
@@ -1446,7 +1681,7 @@ namespace Test
                     {                        
                         Thread.Sleep(500);
 
-                        if (tryAgain == 3)
+                        if (tryAgain == 5)
                         {
                             ImageHandler.OperationDialog_updLog("<KEY> Press BACK", Color.White);
                             ImageHandler.OperationDialog_updLog("Unable to find anything. Selecting current source and attempting to find again...", Color.White);
@@ -1471,9 +1706,9 @@ namespace Test
 
                         // Recheck if already press OK button
                         Thread.Sleep(3000);
-                        int sourceReCheck = 100;
+                        //EN_INPUT_LIST sourceReCheck = EN_INPUT_LIST.EN_INPUT_MAX;
                         ImageHandler.OperationDialog_updLog("Rechecking if still in source menu...", Color.White);
-                        while (sourceReCheck == (int)CurrentInput(ImageHandler.ExtractText(ImageHandler.EN_OCR_ITEM.OCR_ITEM_SOURCE)))
+                        while (source == CurrentInput(ImageHandler.ExtractText(ImageHandler.EN_OCR_ITEM.OCR_ITEM_SOURCE)))
                         {
                             ImageHandler.OperationDialog_updLog("Still in source menu...", Color.White);
                             ImageHandler.OperationDialog_updLog("<KEY> Press OK", Color.White);
@@ -1484,12 +1719,14 @@ namespace Test
                         ImageHandler.OperationDialog_updLog("Waiting TV to receive signal...", Color.White);                        
                         Thread.Sleep(7000); // Wait 10 sec until image appear
                         ret = true;
+                        break;
                     }
                     else if ((int)source < (int)src)
                     {
                         ImageHandler.OperationDialog_updLog("<KEY> Press LEFT", Color.White);
                         ImageHandler.OperationDialog_updLog("Moving to the left icon...", Color.White);
                         IR_sendCommand(IrFormat, "LEFT");
+                        tryAgainFull++;
                         Thread.Sleep(500);
                     }
                     else if ((int)source > (int)src)
@@ -1497,7 +1734,14 @@ namespace Test
                         ImageHandler.OperationDialog_updLog("<KEY> Press RIGHT", Color.White);
                         ImageHandler.OperationDialog_updLog("Moving to the right icon...", Color.White);
                         IR_sendCommand(IrFormat, "RIGHT");
+                        tryAgainFull++;
                         Thread.Sleep(500);
+                    }
+
+                    if(tryAgainFull == 15)
+                    {
+                        ImageHandler.OperationDialog_updLog("Unable to find input source. Operation terminated...", Color.White);
+                        break;
                     }
                 }
                 //Saal.IRTOYS_CloseCon();
@@ -1558,7 +1802,7 @@ namespace Test
         #endregion
 
         #region Save to folder
-        private string[] _SaveImagesToOutputFolder(Bitmap[] images)
+        private string[] _SaveImagesToOutputFolder(Bitmap images)
         {
             // create folder in exe level
             var current_app_path = Environment.CurrentDirectory;
@@ -1579,6 +1823,12 @@ namespace Test
             if (!Directory.Exists(imagesFolder))
                 Directory.CreateDirectory(imagesFolder);
 
+            var imagePath = imagesFolder + "\\" + _executionTime + ".png";
+            if (File.Exists(imagePath))
+                File.Delete(imagePath);
+
+            images.Save(imagePath, ImageFormat.Png);
+            /*
             for (int i = 0; i < images.Length; ++i)
             {
                 var imagePath = imagesFolder + "\\" + _executionTime + (i + 1) + ".png";
@@ -1587,7 +1837,7 @@ namespace Test
 
                 images[i].Save(imagePath, ImageFormat.Png);
             }
-
+            */
             return new[] { imagesFolder, _executionTime };
         }
 
@@ -1614,16 +1864,25 @@ namespace Test
             // decide to execute or note
             DoExecute = true;
             ImageHandler.OperationDialog_updLog("Test Start !!!", Color.White);
+
+            elapsedTime = 0;
+            SetTimer(EN_ID_TIMER.ID_TIMER_OPERATION);
         }
 
         private void InvokeAfterExecute()
         {
-            ImageHandler.OperationDialog_updLog("Test Finish !!!", Color.White);
+            string currentSec = (elapsedTime % 60).ToString();
+            string currentMin = (elapsedTime / 60).ToString();            
+            string currentHour = (double.Parse(currentMin) / 60).ToString();
+
+            ImageHandler.OperationDialog_updLog("Test Finish !!! (Time elapsed : " + currentHour + "hour " + currentMin + "min " + currentSec + "sec)", Color.White);
             ImageHandler.OperationDialog_updLog("------------------------------------", Color.White);
             ImageHandler.UpdOpFlag = true;
 
             string remain = "Current Status : " + (noOfRow - noOfRowTemp).ToString() + "/" + noOfRow.ToString() + "";
             ImageHandler.OperationDialog_updPbar(100, remain);
+
+            
         }
 
         private void InvokeBeforeExecuteButAfterSelection(object selection, object datagridview, object owner, BackgroundWorker backgroundWorker)
@@ -1646,8 +1905,7 @@ namespace Test
         private void DataRowProcess()
         {
             ImageHandler.startScan();    
-            bgWorkerFromTopForm.ReportProgress((noOfRow - noOfRowTemp) * 100 / noOfRow);
-            
+            bgWorkerFromTopForm.ReportProgress((noOfRow - noOfRowTemp) * 100 / noOfRow);            
 
             KillTimer();
 
@@ -1655,56 +1913,69 @@ namespace Test
 
             // Validating input
             Console.WriteLine("Start validating input");
+            ImageHandler.OperationDialog_updLog("Start validating input...", Color.White);
             if (!validateProcess())
             {
                 Console.WriteLine("Validation failed");
+                ImageHandler.OperationDialog_updLog("Input validation failed. Skipping this row...", Color.Red);
                 BusyFlag = false;
                 return;
             }
 
             Console.WriteLine("Start process");
+            ImageHandler.OperationDialog_updLog("Start processing row...", Color.White);
 
             // Test operation
-            bool errFlag = true;
+            bool errFlagDev = true;
+            bool errFlagInpSrc = false;
             bool res = false;
-            for(int i = 0; i < deviceNum; i++)
+            string devtemp = toExecute.Cells[3].Value.ToString();
+            for (int i = 0; i < deviceNum; i++)
             {
+                // Check test device name
                 Regex regex = new Regex(@_deviceSettings[i].DevName);
-                Match match = regex.Match(toExecute.Cells[3].Value.ToString());
+                Match match = regex.Match(devtemp);
                 if (match.Success)
                 {
-                    // Check equipment validity       
+                    // Check test device connection       
                     if (_deviceSettings[i].Con_Status != false)
                     {
-                        // Operation to change current input
+                        errFlagDev = false;
+
+                        // Operation to change current input. Break if input source does not exist.
                         EN_INPUT_LIST cur_input_temp = CurrentInput(toExecute.Cells[1].Value.ToString());
-                        while (cur_input != cur_input_temp)
+                        if (cur_input != cur_input_temp)
                         {
-                            if(ChangeSource(cur_input_temp))
-                            {
+                            if (ChangeSource(cur_input_temp))
+                            {                                
                                 cur_input = cur_input_temp;
+                            }
+                            else
+                            {
+                                errFlagInpSrc = true;
                                 break;
-                            }                                
+                            }
                         }
 
-                        // Operation to change format name and compare image
-                        errFlag = false;
+                        // Operation to change format name and compare image                        
                         res = SendCommand(_deviceSettings[i].DevName, _deviceSettings[i].PortID, _deviceSettings[i].Con_Method)
                                 && CompareImgResult(toExecute.Cells[7].Value.ToString());
 
-                        var currentImage = ImageHandler.CurrentFrame;
-                        Action okAction = () =>
+                        Action<Bitmap> okAction = (bitmapCell) =>
                         {
                             toExecute.Cells[11].Value = "OK";
-                            var greenmark = Properties.Resources.greenmark;
-                            var resizedImage = new Bitmap(greenmark,
+                            var imageFolderPath = _SaveImagesToOutputFolder(bitmapCell);
+
+                            var resizedImage = new Bitmap(bitmapCell,
                                 toExecute.Cells[toExecute.DataGridView.ColumnCount - 1].Size);
                             toExecute.Cells[toExecute.DataGridView.ColumnCount - 1].Value = resizedImage;
+                            toExecute.Cells[toExecute.DataGridView.ColumnCount - 1].Tag = imageFolderPath;
                         };
-                        Action<Bitmap[], Bitmap> ngAction = (bitmapArray, bitmapCell) =>
+
+                        Action<Bitmap> ngAction = (bitmapCell) =>
                         {
                             toExecute.Cells[11].Value = "NG1";
-                            var imageFolderPath = _SaveImagesToOutputFolder(bitmapArray);
+                            var imageFolderPath = _SaveImagesToOutputFolder(bitmapCell);
 
                             var resizedImage = new Bitmap(bitmapCell,
                                 toExecute.Cells[toExecute.DataGridView.ColumnCount - 1].Size);
@@ -1714,29 +1985,40 @@ namespace Test
 
                         if (res)
                         {
-                            okAction();
+                            ImageHandler.drawWatermark(ref OKImage, @"OK Image");
+                            okAction(OKImage);
                         }
                         else
                         {
-                            ImageHandler.drawWatermark(ref currentImage, @"Reference image");
-                            ImageHandler.drawWatermark(ref NGImage, @"Problematic image from Binary Test");
-                            ngAction(new[] { currentImage, NGImage }, NGImage);
+                            ImageHandler.drawWatermark(ref NGImage, @"NG image");
+                            ngAction(NGImage);
                         }
 
                         toExecute.Cells[12].Value = tbVer.Text;
                         toExecute.Cells[13].Value = tbTester.Text;
-                    }
+                        toExecute.Cells[14].Value = DateTime.Now.ToString("d/M/yyyy");
+                    }          
                     break;                
                 }
             }
 
-            if (errFlag)
+            // ERROR) Test device disconnected
+            if (errFlagDev)
             {
+                ImageHandler.OperationDialog_updLog("Test device not connected. Skipping this row...", Color.White);
                 toExecute.Cells[3].Value += " (#ERROR)";
+            }
+
+            // ERROR) Input source does not exist
+            if (errFlagInpSrc)
+            {
+                ImageHandler.OperationDialog_updLog("Input source does not exist. Skipping this row...", Color.White);
+                toExecute.Cells[1].Value += " (#ERROR)";
             }
 
             BusyFlag = false;
             Console.WriteLine("Stop process");
+            ImageHandler.OperationDialog_updLog("Finished processing row...", Color.White);
             SetTimer(EN_ID_TIMER.ID_TIMER_CLEAR_DICT);
             ImageHandler.stopScan();
             noOfRowTemp--;

@@ -10,9 +10,9 @@ using System.IO.Ports;
 using System.Text.RegularExpressions;
 using System.Data;
 using SAAL;
-//using AForge.Video;
-//using AForge.Video.DirectShow;
-//using AForge.Imaging;
+using AForge.Video;
+using AForge.Video.DirectShow;
+using AForge.Imaging;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.ComponentModel;
@@ -25,6 +25,14 @@ namespace Test
 {
     public class QuantumAllFormat:IPlugin
     {
+
+        enum CameraView
+        {
+            Original,
+            Preprocess
+        }
+
+        private CameraView camview;
 
         #region Member: IR
         private ComboBox cbRCFormatList;
@@ -43,24 +51,13 @@ namespace Test
         #region Member: Extra
         private TextBox tbTester;
         private TextBox tbVer;
-        private TextBox PictureDir;
+        private TextBox tbDirectory;
         #endregion
 
-        IplImage imgOri, imgPreProcess;
+        IplImage imgOri, imgbeforePreProcess, imgPreProcess;
         Bitmap bm,bm2;
-
-        const double ScaleFactor = 2.5;
-        const int MinNeighbors = 1;
-        CvSize MinSize;
-
-        CvHaarClassifierCascade cascade;
-
-        int testx = 0;
-        int testy = 0;
-        CvPoint testpoint1 = new CvPoint(0, 0);
-        CvPoint testpoint2 = new CvPoint(0, 0);
-        CvPoint testpoint3 = new CvPoint(0, 0);
-        CvPoint testpoint4 = new CvPoint(0, 0);
+        String m_filename;
+        
         CvPoint testpoint = new CvPoint(0, 0);
         CvFont font;
         DateTime timeStamp;
@@ -97,6 +94,7 @@ namespace Test
 
         private RibbonHost ConnectionToolsHost;
         private Panel ConnectionCheckTools;
+        private Panel pnlEquipment;
         private Button buttonTestEquipment;
         private ProgressBar progressBar;
         private Int32 inProgress;
@@ -217,11 +215,20 @@ namespace Test
             BusyFlag = true;
             EnumListUser.ResultQuantumDataTest Result = EnumListUser.ResultQuantumDataTest.OK_NG;//assign first
 
-            if ((connectedCOM == null) || (connectedUART==null))
+            if ((connectedCOM == null) || (connectedUART==null) || (IR_RemoteConnected == null))
             {
                 MessageBox.Show("Please check the equipment connection");
-                toExecute.Cells[DEFINE_REMARK].Value += " (#ERROR)";
-                toExecute.Cells[DEFINE_RESULT].Value = "NT";
+
+                if (connectedCOM == null)
+                    toExecute.Cells[DEFINE_REMARK].Value += " (#ERROR) Device Connection ";
+
+                if (connectedUART == null)
+                    toExecute.Cells[DEFINE_REMARK].Value += "UART not connected ";
+
+                if (IR_RemoteConnected == null)
+                    toExecute.Cells[DEFINE_REMARK].Value += "IR not connected ";
+
+                Result = EnumListUser.ResultQuantumDataTest.NT;
             }
             else
             {
@@ -247,6 +254,8 @@ namespace Test
             toExecute.Cells[DEFINE_VER].Value = tbVer.Text;
             toExecute.Cells[DEFINE_DATE].Value = timeStamp;// common timestamp shared
 
+            #region Parse Result
+
             if (Result == EnumListUser.ResultQuantumDataTest.OK)
                 toExecute.Cells[DEFINE_RESULT].Value = "OK";
             else
@@ -268,12 +277,57 @@ namespace Test
                 else if (Result == EnumListUser.ResultQuantumDataTest.dash)
                     toExecute.Cells[DEFINE_RESULT].Value = "-";
 
-                SavePictureForReference(currentSourceFormat,"");
+                
 
             }
+            #endregion
+            SavePictureForReference(currentSourceFormat, "");
 
             Thread.Sleep(2000);
             BusyFlag = false; 
+        }
+
+        private EnumListUser.ResultQuantumDataTest DecideResult(Boolean InstrumentError)
+        {
+            if (!InstrumentError)
+            {
+                if (mysaal.NoFreezed && mysaal.NoReboot && mysaal.SMPTEBarDisplay)
+                {
+                    return EnumListUser.ResultQuantumDataTest.OK;
+                }
+                else
+                {
+                    if (!mysaal.NoFreezed)
+                        toExecute.Cells[DEFINE_REMARK].Value += " TV freezed ";
+                    else if (!mysaal.NoReboot)
+                        toExecute.Cells[DEFINE_REMARK].Value += " TV reboot ";
+                    else if (!mysaal.SMPTEBarDisplay)
+                        toExecute.Cells[DEFINE_REMARK].Value += " Pattern Not display ";
+
+                    
+
+                    return EnumListUser.ResultQuantumDataTest.NG1;
+                }
+            }
+            else
+            {
+                SavePictureForReference(currentSourceFormat, "Error Command");
+
+                if (mysaal.NoFreezed && mysaal.NoReboot)
+                {
+                    return EnumListUser.ResultQuantumDataTest.OK;
+                }
+                else
+                {
+                    if (!mysaal.NoFreezed)
+                        toExecute.Cells[DEFINE_REMARK].Value += " TV freezed ";
+                    else if (!mysaal.NoReboot)
+                        toExecute.Cells[DEFINE_REMARK].Value += " TV reboot ";
+
+                    return EnumListUser.ResultQuantumDataTest.NG1;
+                }
+
+            }
         }
 
         private EnumListUser.ResultQuantumDataTest DataRowProcesExecuter(int loop)
@@ -304,8 +358,13 @@ namespace Test
 
             Console.WriteLine("2) Curr:" + currentSourceFormat + " " + currentSpecInfo);
 
-            var paths = new[] { "QuantumData", currentSourceFormat };
-            toExecute.Cells[DEFINE_PICTURE_REF].Tag = paths;
+            if (!System.IO.Directory.Exists(tbDirectory.Text))
+            {
+                System.IO.Directory.CreateDirectory(tbDirectory.Text);
+            }
+
+            var paths = new[] { tbDirectory.Text, currentSourceFormat };///
+            toExecute.Cells[DEFINE_PICTURE_REF].Tag = paths;////
 
             EnumListUser.ResultQuantumDataTest Result = EnumListUser.ResultQuantumDataTest.OK_NG;//assign first
 
@@ -324,47 +383,29 @@ namespace Test
                     bool containsError = Regex.IsMatch(instrumentResponse, "ERROR", RegexOptions.IgnoreCase);
                     if (containsError)
                     {
-                        Result = EnumListUser.ResultQuantumDataTest.NT;
+                        // sometime purposely sent the invalid command to see if the tv reboot or freeze
+                        //Result = EnumListUser.ResultQuantumDataTest.NT;
                         toExecute.Cells[DEFINE_REMARK].Value += instrumentResponse;
+                        Result = DecideResult(true);
                         break;
                     }
 
                     Thread.Sleep(2000);// enough time to see the picture
                                        // send IR command to tv
-                    if (IR_RemoteConnected == null)
-                    {
-                        Result = EnumListUser.ResultQuantumDataTest.NT;
-                        MessageBox.Show("Please check the IR remote connection");
-                        toExecute.Cells[DEFINE_REMARK].Value += "IR not connected ";
-                        break;
-                    }
-                    else
-                    {
-                        for (int irsend = 0; irsend < 2; irsend++) // to check the TV not freezed
-                        {
-                            sendIRTrans("MENU");
-                            Thread.Sleep(2000);// enough time to see the picture changing
-                                               // save the bitmap?
-                            SavePictureForReference(currentSourceFormat,"Menu");
-                        }
-                    }
 
-                    if (mysaal.NoFreezed && mysaal.NoReboot && mysaal.SMPTEBarDisplay)
+                    for (int irsend = 0; irsend < 2; irsend++) // to check the TV not freezed
                     {
-                        Result = EnumListUser.ResultQuantumDataTest.OK;
+                        sendIRTrans("MENU");
+                        Thread.Sleep(2000);// enough time to see the picture changing
+                                           // save the bitmap?
+                        SavePictureForReference(currentSourceFormat,"Menu");
+                        sendIRTrans("BACK");
+                        Thread.Sleep(2000);
                     }
-                    else
-                    {
-                        Result = EnumListUser.ResultQuantumDataTest.NG1;
-                        if (!mysaal.NoFreezed)
-                            toExecute.Cells[DEFINE_REMARK].Value += "TV freezed ";
-                        else if (!mysaal.NoReboot)
-                            toExecute.Cells[DEFINE_REMARK].Value += "TV reboot ";
-                        else if (!mysaal.SMPTEBarDisplay)
-                            toExecute.Cells[DEFINE_REMARK].Value += "Pattern Not display ";
+                    Result = DecideResult(false);
+                    if (Result == EnumListUser.ResultQuantumDataTest.NG1)
                         break;
-                    }
-
+                   
                 }
                 #endregion //
                 #region Correspondence espected: TV doesn't reboot or freeze, and normal performance is possible.
@@ -389,21 +430,15 @@ namespace Test
                     bool containsError = Regex.IsMatch(instrumentResponse, "ERROR", RegexOptions.IgnoreCase);
                     if (containsError)
                     {
-                        Result = EnumListUser.ResultQuantumDataTest.NT;
+                        // sometime purposely sent the invalid command to see if the tv reboot or freeze
+                        //Result = EnumListUser.ResultQuantumDataTest.NT;
                         toExecute.Cells[DEFINE_REMARK].Value += instrumentResponse;
+                        Result = DecideResult(true);
                         break;
                     }
 
                     // send IR command to tv
-                    if (IR_RemoteConnected == null)
-                    {
-                        Result = EnumListUser.ResultQuantumDataTest.NT;
-                        MessageBox.Show("Please check the IR remote connection");
-                        toExecute.Cells[DEFINE_REMARK].Value += "IR not connected ";
-                        break;
-                    }
-                    else
-                    {
+
                         #region 2) The image is normally displayed.
                         for (int irsend = 0; irsend < 5; irsend++)
                         {
@@ -413,28 +448,15 @@ namespace Test
                             Thread.Sleep(1000);// need send twice to change. first click only to appear menu second send to change item
 
                             sendIRTrans("FORMAT");
-                            Thread.Sleep(2000);// enough time to see the picture changing
+                            Thread.Sleep(4000);// enough time to see the picture changing
                                                // save teh bitmap?
                             SavePictureForReference(currentSourceFormat, "Picture_Format");
                             sendIRTrans("BACK");
                             Thread.Sleep(2000);
 
-
-                            if (mysaal.NoFreezed && mysaal.NoReboot && mysaal.SMPTEBarDisplay)
-                            {
-                                Result = EnumListUser.ResultQuantumDataTest.OK;
-                            }
-                            else
-                            {
-                                Result = EnumListUser.ResultQuantumDataTest.NG1;
-                                if(!mysaal.NoFreezed)
-                                    toExecute.Cells[DEFINE_REMARK].Value += "TV freezed ";
-                                else if (!mysaal.NoReboot)
-                                    toExecute.Cells[DEFINE_REMARK].Value += "TV reboot ";
-                                else if (!mysaal.SMPTEBarDisplay)
-                                    toExecute.Cells[DEFINE_REMARK].Value += "Pattern Not display ";
+                            Result = DecideResult(false);
+                            if (Result == EnumListUser.ResultQuantumDataTest.NG1)
                                 break;
-                            }
 
 
                             Regex formatRegex_special = new Regex(@"1080i30|1080P59|1080P60");
@@ -462,8 +484,6 @@ namespace Test
                             #endregion //
                         }
                         #endregion //
-                    }
-
 
 
                 }
@@ -486,21 +506,7 @@ namespace Test
             }
             else
             {
-            
-                String filename = timeStamp.Year.ToString() + "_" + timeStamp.Day.ToString() + "_" + timeStamp.Month.ToString() + "_" + timeStamp.Hour.ToString() + "_" + timeStamp.Minute.ToString() + "_" + timeStamp.Second.ToString();
-
-                if (!System.IO.Directory.Exists("QuantumData"))
-                {
-                    System.IO.Directory.CreateDirectory("QuantumData");
-                }
-
-                //lock (pictureBox)
-                //{
-                    //pictureBox.InvokeRequired()
-                    //pictureBoxPopup.Image.Save("QuantumData\\" + additional1 + "_" + filename + "_" + additional2 + ".jpg",ImageFormat.Jpeg );
-                    //pictureBox.Image.Save("QuantumData\\" + additional1 + "_" + filename + "_" + additional2 + "_.jpg", ImageFormat.Jpeg);
-                    bm.Save("QuantumData\\" + additional1 + "_" + filename + "_" + additional2 + "_.png", ImageFormat.Png);
-            //}
+                bm.Save(tbDirectory.Text + "\\" + additional1 + "_" + m_filename + "_" + additional2 + "_.png", ImageFormat.Png);
             }
         }
 
@@ -524,7 +530,6 @@ namespace Test
         // constructor
         public QuantumAllFormat()
         {
-           // EquipmentInit();
             PopulateUI_Device();
             PopulateUI_QuantumData();
             //PopulateUI_DebugMsg();
@@ -573,6 +578,8 @@ namespace Test
                 UARTLabel.Text = "UART";
                 RemoteIRLabel.BackColor = System.Drawing.SystemColors.Control;
                 RemoteIRLabel.Text = "Remote";
+                pnlEquipment.BackColor = SystemColors.Control;
+                buttonTestEquipment.BackColor = Color.LightBlue;
 
                 backgroundWorker.RunWorkerAsync("Test");
             }
@@ -721,7 +728,7 @@ namespace Test
             if (connectedUART != null)
             {
                 mysaal.UART_ClosePort();
-                mysaal.UART_Setup(connectedUART, 115200);
+                mysaal.UART_Setup(connectedUART, 115200);//  issue when the device not physically connected
                 
             }
 
@@ -746,6 +753,8 @@ namespace Test
                  QD882Label.BackColor = Color.Red;
                  QD882Label.Text = mysaal.QuantumDataLabel + " FAILED";
                  mysaal.QD882_ClosePort();// close once.
+                 pnlEquipment.BackColor = Color.Red;
+                 buttonTestEquipment.BackColor = Color.Red;
             }
                 
             if (connectedUART != null)
@@ -757,6 +766,8 @@ namespace Test
             {
                  UARTLabel.BackColor = Color.Red;
                  UARTLabel.Text = "UART FAILED";
+                 pnlEquipment.BackColor = Color.Red;
+                 buttonTestEquipment.BackColor = Color.Red;
             }
 
             if ((IR_RemoteConnected != null) && (mysaal.IRTRANS_Init()))
@@ -771,6 +782,8 @@ namespace Test
             {
                 RemoteIRLabel.BackColor = Color.Red;
                 RemoteIRLabel.Text = "Remote Failed";
+                pnlEquipment.BackColor = Color.Red;
+                buttonTestEquipment.BackColor = Color.Red;
             }
             progressBar.Value = 100;
             progressBar.Visible = false;
@@ -1021,7 +1034,6 @@ namespace Test
         {
             Console.WriteLine(sender.ToString());
             Console.WriteLine(e.ToString());
-            pictureBox.Size = new System.Drawing.Size(100, 70);
         }
         private void pictureBox_DoubleClick(object sender, EventArgs e)
         {
@@ -1029,6 +1041,16 @@ namespace Test
             popupBox.WindowState = FormWindowState.Minimized;
             popupBox.Show();
             popupBox.WindowState = FormWindowState.Normal;
+
+            //switch view
+            if (camview == CameraView.Original)
+            {
+                camview = CameraView.Preprocess;
+            }
+            else if (camview == CameraView.Preprocess)
+            {
+                camview = CameraView.Original;
+            }
         }
 
 
@@ -1036,18 +1058,12 @@ namespace Test
         {
             Console.WriteLine(sender.ToString());
             Console.WriteLine(e.ToString());
-            //mysaal.videoDisplay.Start();
-            
-
         }
 
         private void camMicButtonOff_click(object sender, EventArgs e)
         {
             Console.WriteLine(sender.ToString());
             Console.WriteLine(e.ToString());
-            //mysaal.videoDisplay.Stop();
-            //_cameraThread.Abort();
-
         }
 
         private void CaptureCamera()
@@ -1056,53 +1072,66 @@ namespace Test
             _cameraThread.Start();
         }
 
+        delegate void UpdatePictureinPopupDelegate(String additional1, String additional2);
+
+        private void UpdatePictureinPopup(String additional1, String additional2)
+        {
+
+            if (pictureBoxPopup.InvokeRequired)
+            {
+                pictureBoxPopup.BeginInvoke(new UpdatePictureinPopupDelegate(UpdatePictureinPopup), additional1, additional2);
+            }
+            else
+            {
+                if (ImageHandler.CurrentFrame != null)
+                { 
+                    var currentImage = new Bitmap(ImageHandler.CurrentFrame);
+
+                    imgOri = new IplImage(currentImage.Width, currentImage.Height, BitDepth.U8, 3);  //creates the OpenCvSharp IplImage;
+                    imgOri.CopyFrom(currentImage); // copies the bitmap data to the IplImage
+
+                    CvSize size = new CvSize(currentImage.Width / 2, currentImage.Height / 2);// resize to half
+
+                    imgbeforePreProcess = Cv.CreateImage(size, BitDepth.U8, 3);
+                    Cv.Resize(imgOri, imgbeforePreProcess);// color segmentation need lower resolution to meet realtime processing
+
+                    imgPreProcess = imgbeforePreProcess.Clone();
+
+                    ColorSegmentation();
+
+
+                    timeStamp = DateTime.Now;
+                    m_filename = timeStamp.Year.ToString() + "_" + timeStamp.Day.ToString() + "_" + timeStamp.Month.ToString() + "_" + timeStamp.Hour.ToString() + "_" + timeStamp.Minute.ToString() + "_" + timeStamp.Second.ToString();
+                    imgOri.PutText("Timestamp: " + currentSourceFormat + "_[" + currentImage.Width + " x " + currentImage.Height + "] " + m_filename + "_", testpoint, fontTimeStamp, CvColor.Green);
+
+                    bm = BitmapConverter.ToBitmap(imgOri);
+                    bm.SetResolution(imgOri.Size.Width, imgOri.Size.Height);
+
+                    bm2 = BitmapConverter.ToBitmap(imgPreProcess);
+                    bm2.SetResolution(imgPreProcess.Width, imgPreProcess.Height);
+
+                    if (camview == CameraView.Original)
+                        pictureBoxPopup.Image = bm;
+                    else if (camview == CameraView.Preprocess)
+                        pictureBoxPopup.Image = bm2;
+
+                    imgOri = null;
+                    imgPreProcess = null;
+                    imgbeforePreProcess = null;
+
+                }
+            }
+        }
+
         private void CaptureCameraCallback()
         {
             FontAndOverlaySetting();
-
-            eyeDetectionSetting();
             ColorSegmentationSetting();
-
-
-
-
-            CvCapture cap = CvCapture.FromCamera(cbCamListIndex); //max for HD WEBCAM C525 1280 x 720 screen resolution
-            Cv.SetCaptureProperty(cap, CaptureProperty.FrameWidth, 1280);
-            Cv.SetCaptureProperty(cap, CaptureProperty.FrameHeight, 720);
-
-            //cap.FrameHeight = 1280;
-            //cap.FrameWidth = 720;
 
             while (true)
             {
-                imgOri = cap.QueryFrame();
-                //imgPreProcess = new IplImage(imgOri.Size, imgOri.Depth, imgOri.NChannels);
-                //imgPreProcess = imgOri;
-                imgPreProcess = imgOri.Clone();
-
-                //fourEyeDetection();
-                ColorSegmentation();
-
-                timeStamp = DateTime.Now;
-                String filename = timeStamp.Year.ToString() + "_" + timeStamp.Day.ToString() + "_" + timeStamp.Month.ToString() + "_" + timeStamp.Hour.ToString() + "_" + timeStamp.Minute.ToString() + "_" + timeStamp.Second.ToString();
-                imgOri.PutText("Timestamp: " + currentSourceFormat + "_" + filename + "_" , testpoint, fontTimeStamp, CvColor.Green);
-
-                // showing
-                bm = BitmapConverter.ToBitmap(imgOri);
-                bm.SetResolution(imgOri.Size.Width, imgOri.Size.Height);
-                pictureBox.Image = bm;
-
-                bm2 = BitmapConverter.ToBitmap(imgPreProcess);
-                bm2.SetResolution(pictureBoxPopup.Width, pictureBoxPopup.Height);
-
-                pictureBoxPopup.Image = bm2;
-
-                imgOri = null;
-                imgPreProcess = null;
-                //bm = null;
-                bm2 = null;
-
-                
+                Thread.Sleep(500);
+                UpdatePictureinPopup("", "");
             }
         }
 
@@ -1112,111 +1141,20 @@ namespace Test
             Cv.InitFont(out fontTimeStamp, FontFace.HersheyComplex, 0.8, 0.8);
         }
 
-        private void eyeDetectionSetting()
-        {
-            cascade = CvHaarClassifierCascade.FromFile("haarcascade_eye.xml");
-            MinSize = new CvSize(30, 30);
-        }
-
-        private void fourEyeDetection()
-        {
-            CvSeq<CvAvgComp> eyes = Cv.HaarDetectObjects(imgOri, cascade, Cv.CreateMemStorage(), ScaleFactor, MinNeighbors, HaarDetectionType.DoCannyPruning, MinSize);
-
-            int num_pattern_detect = 0;
-
-            foreach (CvAvgComp eye in eyes.AsParallel())
-            {
-                if (num_pattern_detect == 0)
-                {
-                    testpoint1.X = (eye.Rect.Location.X) + (eye.Rect.Size.Width / 2);
-                    testpoint1.Y = (eye.Rect.Location.Y) + (eye.Rect.Size.Height / 2);
-                }
-
-                if (num_pattern_detect == 1)
-                {
-                    testpoint2.X = (eye.Rect.Location.X) + (eye.Rect.Size.Width / 2);
-                    testpoint2.Y = (eye.Rect.Location.Y) + (eye.Rect.Size.Height / 2);
-                }
-
-                if (num_pattern_detect == 2)
-                {
-                    testpoint3.X = (eye.Rect.Location.X) + (eye.Rect.Size.Width / 2);
-                    testpoint3.Y = (eye.Rect.Location.Y) + (eye.Rect.Size.Height / 2);
-                }
-
-                if (num_pattern_detect == 3)
-                {
-                    testpoint4.X = (eye.Rect.Location.X) + (eye.Rect.Size.Width / 2);
-                    testpoint4.Y = (eye.Rect.Location.Y) + (eye.Rect.Size.Height / 2);
-                }
-                num_pattern_detect++;
-                imgOri.DrawRect(eye.Rect, CvColor.Red, 3);
-                testx = (eye.Rect.Location.X) + (eye.Rect.Size.Width / 2);
-                testy = (eye.Rect.Location.Y) + (eye.Rect.Size.Height / 2);
-
-            }
-
-            imgOri.DrawCircle(testx, testy, 10, CvColor.Red, 3);// again
-            testpoint.X = testx;
-            testpoint.Y = testy;
-
-            imgOri.PutText("Marker x of " + num_pattern_detect.ToString(), testpoint, font, CvColor.Red);
-
-            double ratio;
-            testpoint.X = testx;
-            testpoint.Y = testy + 12;
-            if (num_pattern_detect == 4)
-            {
-                imgOri.PutText("Valid marker !", testpoint, font, CvColor.Green);
-
-                imgOri.DrawLine(testpoint1, testpoint2, CvColor.Green, 3);
-                imgOri.DrawLine(testpoint1, testpoint4, CvColor.Green, 3);
-
-                try
-                {
-                    ratio = ((double)testpoint2.X - (double)testpoint1.X) / ((double)testpoint4.Y - (double)testpoint1.Y);
-                }
-                catch
-                {
-                    // div 0
-                    ratio = 0.0;
-                }
-
-                double ratio_tester1, ratio_tester2;
-
-                ratio_tester1 = ((Math.Abs(ratio) - 1.33) / 1.33) * 100;
-
-                ratio_tester2 = ((Math.Abs(ratio) - 1.78) / 1.78) * 100;
-
-                testpoint.Y = testy + 24;
-                imgOri.PutText("Ratio is (" + testpoint2.X.ToString() + " - " + testpoint1.X.ToString() + ") / (" + testpoint4.Y.ToString() + " - " + testpoint1.Y.ToString() + ")", testpoint, font, CvColor.Blue);
-                testpoint.Y = testy + 38;
-                imgOri.PutText("= " + Math.Abs(ratio).ToString(), testpoint, font, CvColor.Blue);
-
-                /*testpoint.Y = testy + 60;
-                if ((Math.Abs(ratio) > 1.6))
-                    imgOri.PutText("16:9 Widescreen", testpoint, font, CvColor.Blue);
-                else
-                    imgOri.PutText("4:3 Standard", testpoint, font, CvColor.Blue);*/
-            }
-        }
-
         private void ColorSegmentationSetting()
         {
             testpoint.X = 0; testpoint.Y = 20;
         }
         private void ColorSegmentation()
         {
-
             CvSeq comp;
             CvMemStorage storage = new CvMemStorage();
-            Cv.PyrSegmentation(imgOri, imgPreProcess, storage, out comp,2, 30, 50);//An unhandled exception of type 'OpenCvSharp.OpenCVException' occurred in OpenCvSharp.dll
+            Cv.PyrSegmentation(imgbeforePreProcess, imgPreProcess, storage, out comp, 2, 30, 50);//An unhandled exception of type 'OpenCvSharp.OpenCVException' occurred in OpenCvSharp.dll
             //Additional information: Failed to allocate 11313176 bytes
 
             //public static void PyrSegmentation(IplImage src, IplImage dst, CvMemStorage storage, out CvSeq comp, int level, double threshold1, double threshold2);
-
-            imgPreProcess.PutText("Number Of Color " + comp.Total.ToString(), testpoint, font, CvColor.Red);
-            if(comp.Total >15) // heiristic cut off value..
+            imgPreProcess.PutText("[" + imgPreProcess.Width + " x " + imgPreProcess.Height+"]" +" Number Of Color " + comp.Total.ToString(), testpoint, font, CvColor.Red);
+            if (comp.Total > 15) // heiristic cut off value..
             {
                 mysaal.SMPTEBarDisplay = true;
             }
@@ -1240,7 +1178,7 @@ namespace Test
 
             
 
-            Panel pnlEquipment = new Panel();
+            pnlEquipment = new Panel();
             pnlEquipment.AutoScroll = true;
 
             QD882Label = new TextBox();
@@ -1527,6 +1465,7 @@ namespace Test
             pictureBox.Size = new System.Drawing.Size(100, 50);// preview..
             pictureBox.SizeMode = PictureBoxSizeMode.StretchImage;
             pictureBox.DoubleClick += new EventHandler(pictureBox_DoubleClick);
+            pictureBox.Click += new EventHandler(pictureBox_Click);
             RibbonHost pictureBoxHost = new RibbonHost();
             pictureBoxHost.HostedControl = pictureBox;
             pictureBoxHost.ToolTip = "Click to enlarge";
@@ -1586,12 +1525,13 @@ namespace Test
             ribbonEquipmentSetting.Panels.Add(recordSetting);
 
             Panel panelExtra = new Panel();
-            panelExtra.Size = new Size(155, 50);
+            panelExtra.Size = new Size(185, 50);
+            panelExtra.AutoScroll = true;
 
             Label lblTester = new Label();
             lblTester.Text = "Tester :";
             lblTester.TextAlign = ContentAlignment.MiddleRight;
-            lblTester.Size = new Size(50, 20);
+            lblTester.Size = new Size(60, 20);
             panelExtra.Controls.Add(lblTester);
 
             tbTester = new TextBox();
@@ -1603,7 +1543,7 @@ namespace Test
             Label lblVer = new Label();
             lblVer.Text = "Version :";
             lblVer.TextAlign = ContentAlignment.MiddleRight;
-            lblVer.Size = new Size(50, 20);
+            lblVer.Size = new Size(60, 20);
             lblVer.Location = new Point(panelExtra.Controls[panelExtra.Controls.Count - 2].Location.X,
                     panelExtra.Controls[panelExtra.Controls.Count - 1].Location.Y + lblTester.Height + 5);
             panelExtra.Controls.Add(lblVer);
@@ -1614,11 +1554,29 @@ namespace Test
                     panelExtra.Controls[panelExtra.Controls.Count - 1].Location.Y);
             panelExtra.Controls.Add(tbVer);
 
+
+            Label lblDirectory = new Label();
+            lblDirectory.Text = "Directory :";
+            lblDirectory.TextAlign = ContentAlignment.MiddleRight;
+            lblDirectory.Size = new Size(60, 20);
+            lblDirectory.Location = new Point(panelExtra.Controls[panelExtra.Controls.Count - 2].Location.X,
+                    panelExtra.Controls[panelExtra.Controls.Count - 1].Location.Y + tbVer.Height + 5);
+            panelExtra.Controls.Add(lblDirectory);
+
+            tbDirectory = new TextBox();
+            tbDirectory.Size = new Size(100, 20);
+            tbDirectory.Location = new Point(panelExtra.Controls[panelExtra.Controls.Count - 1].Location.X + lblDirectory.Width + 2,
+                    panelExtra.Controls[panelExtra.Controls.Count - 1].Location.Y);
+            panelExtra.Controls.Add(tbDirectory);
+
+            tbDirectory.Text = "QuantumData";
+
             RibbonHost panelExtraHost = new RibbonHost();
             panelExtraHost.HostedControl = panelExtra;
 
             recordSetting.Items.Add(panelExtraHost);
         }
+
 
         private void initCamera()
         {
@@ -1626,27 +1584,24 @@ namespace Test
 
             // Init for Camera
             mysaal.CAM_GetCAMList(out cameras);
-            //Saal.CAM_Init(cameras[0]);
-            //Saal.videoDisplay.NewFrame += new NewFrameEventHandler(video_NewFrame);
+            if (cameras.Length > 0)
+            {
+                ImageHandler.CamName = cameras[0]; // set camera device
+                ImageHandler.ImgFromParent = Picture; // send picture box control
+                ImageHandler.ResSize.Width = ResWidth;
+                ImageHandler.ResSize.Height = ResHeight;
+                //var imageGuide = new Bitmap(ResWidth, ResHeight);
+                //imageGuide.Tag = "QuantumAllFormat";
 
-            foreach (string cam in cameras)
-            {
-                cbCamList.Items.Add(cam);
-            }
-            cbCamList.SelectedIndex = 0;
-            /*
-            // Set Camera resolution
-            for (int i = 0; i < Saal.videoDisplay.VideoCapabilities.Length; i++)
-            {
-                //Console.WriteLine(Saal.videoDisplay.VideoCapabilities[i].FrameSize.ToString());
-                if (Saal.videoDisplay.VideoCapabilities[i].FrameSize.Height == ResHeight &&
-                    Saal.videoDisplay.VideoCapabilities[i].FrameSize.Width == ResWidth)
+                //ImageHandler.gridBitmap = imageGuide;
+                ImageHandler.InitCamera(); // start camera
+
+                foreach (string cam in cameras)
                 {
-                    Saal.videoDisplay.VideoResolution = Saal.videoDisplay.VideoCapabilities[i];
-                    Console.WriteLine(Saal.videoDisplay.VideoResolution.FrameSize.ToString());
-                    break;
+                    cbCamList.Items.Add(cam);
                 }
-            }*/
+                cbCamList.SelectedIndex = 0;
+            }
         }
 
         private void popupBox_FormClosing(object sender, FormClosingEventArgs e)
@@ -1661,83 +1616,57 @@ namespace Test
             {
                 btOnOffCam.BackColor = Color.PaleVioletRed;
                 btOnOffCam.Text = "Off";
+                ImageHandler.StartCamera();
                 CaptureCamera();
-
-                cbCamListIndex = this.cbCamList.SelectedIndex;
-                cbCamList.Enabled = false;
             }
             else
             {
+                btOnOffCam.BackColor = Color.LightBlue;
                 btOnOffCam.Text = "On";
+                ImageHandler.StopCamera();
+                if (Picture.Image != null)
+                {
+                    Picture.Image.Dispose();
+                    Picture.Image = null;
+                }
                 _cameraThread.Abort();
-                cbCamList.Enabled = true;
             }
         }
 
         private void cbCamList_SelectedIndexChanged(object sender, EventArgs e)
-        {/*
-            if (Saal.videoDisplay.IsRunning)
+        {
+            ImageHandler.CamName = cbCamList.Text;
+            ImageHandler.ImgFromParent = Picture;
+            ImageHandler.InitCamera();
+
+            btOnOffCam.BackColor = Color.LightBlue;
+            btOnOffCam.Text = "On";
+            if (Picture.Image != null)
             {
-                Saal.videoDisplay.Stop();
+                Picture.Image.Dispose();
+                Picture.Image = null;
             }
-
-            foreach (FilterInfo device in Saal.videoDevice)
-            {
-                if (device.Name == cbCamList.SelectedText)
-                {
-                    Saal.CAM_Init(device.Name);
-                    Saal.videoDisplay.NewFrame += new NewFrameEventHandler(video_NewFrame);
-
-                    if (Saal.videoDisplay.IsRunning == false)
-                    {
-                        Saal.videoDisplay.Start();
-                    }
-                }
-            }*/
         }
 
         private void dataGridView_CellClick(object sender, DataGridViewCellEventArgs e)
         {
-            //toExecute.Cells[toExecute.DataGridView.ColumnCount - 1].Tag = imageFolderPath;
 
             if (!(e.RowIndex >= 0) || !(e.ColumnIndex >= 0))
                 return;
 
             var datagridview = sender as DataGridView;
-
-            //e.Argument.ToString() ==
             
-
             Console.WriteLine(e.RowIndex.ToString() + "   " + e.ColumnIndex.ToString());
-
-            //string[] paths = datagridview.Rows[e.RowIndex].Cells[e.ColumnIndex].Tag as string[];
             string[] paths = datagridview.Rows[e.RowIndex].Cells[DEFINE_PICTURE_REF].Tag as string[];
 
-            //Console.WriteLine("1)" + Environment.CurrentDirectory + " " + paths[0].ToString() + "   " + paths[1].ToString());
-
-            //test
-            /*
-            string path0,path1;
-            path0 = "QuantumData";
-            path1 = "1035i29";
-
-            //var imageviewer = new PictureViewer(paths[0], paths[1]);
-            var imageviewer = new PictureViewer(path0, path1);
-            imageviewer.Text = path0;
-            imageviewer.Show();
-            */
             if (paths == null || paths.Length == 0)
                 return;
 
             Console.WriteLine("2)" + Environment.CurrentDirectory + " "+ paths[0].ToString() + "   " + paths[1].ToString());
 
-            //if (paths[0].ToString().Contains(Environment.CurrentDirectory))
-            //{
-                var imageviewer = new PictureViewer(paths[0], paths[1]);
-                //var imageviewer = new PictureViewer(path0, path1);
-                imageviewer.Text = paths[0];
-                imageviewer.Show();
-            //}
+            var imageviewer = new PictureViewer(paths[0], paths[1]);
+            imageviewer.Text = paths[0];
+            imageviewer.Show();
         }
 
         private void cbRCFormatList_SelectedIndexChanged(object sender, EventArgs e)

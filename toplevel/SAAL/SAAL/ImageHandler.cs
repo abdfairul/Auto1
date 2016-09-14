@@ -93,6 +93,7 @@ namespace SAAL
             public string Opt1;
             public string Opt2;
             public string Opt3;
+            public string Full;
         }
         #endregion
 
@@ -213,6 +214,7 @@ namespace SAAL
             OCR_ITEM_OPT1,
             OCR_ITEM_OPT2,
             OCR_ITEM_OPT3,
+            OCR_ITEM_FULL,
             OCR_ITEM_MAX
         }
 
@@ -464,6 +466,7 @@ namespace SAAL
             cbOCRItemList.Items.Add("Option1");
             cbOCRItemList.Items.Add("Option2");
             cbOCRItemList.Items.Add("Option3");
+            cbOCRItemList.Items.Add("Full");
             cbOCRItemList.SelectedIndexChanged += new EventHandler(cbOCRItemList_SelectedIndexChanged);
             if (!isEnOCR)
                 cbOCRItemList.Enabled = false;
@@ -627,6 +630,11 @@ namespace SAAL
                     words = _item[i].Opt3.Split(';');
                     break;
                 }
+                else if (_item[i].Name == cbOCRProfileList.Text && cbOCRItemList.Text == "Full")
+                {
+                    words = _item[i].Full.Split(';');
+                    break;
+                }
             }
 
             if (words != null && words.Length != 0)
@@ -679,6 +687,11 @@ namespace SAAL
                 else if (_item[i].Name == cbOCRProfileList.Text && cbOCRItemList.Text == "Option3")
                 {
                     words = _item[i].Opt3.Split(';');
+                    break;
+                }
+                else if (_item[i].Name == cbOCRProfileList.Text && cbOCRItemList.Text == "Full")
+                {
+                    words = _item[i].Full.Split(';');
                     break;
                 }
             }
@@ -1539,6 +1552,9 @@ namespace SAAL
                         case EN_OCR_ITEM.OCR_ITEM_OPT3:
                             words = _item[i].Opt3.Split(';');
                             break;
+                        case EN_OCR_ITEM.OCR_ITEM_FULL:
+                            words = _item[i].Full.Split(';');
+                            break;
                     }
                     Rectangle roi = new Rectangle(convRealSize(int.Parse(words[2]), false), convRealSize(int.Parse(words[3]), true), convRealSize(int.Parse(words[0]), false), convRealSize(int.Parse(words[1]), true));
                     processImg.ROI = roi;
@@ -1589,6 +1605,9 @@ namespace SAAL
                 case EN_OCR_ITEM.OCR_ITEM_OPT3:
                     ret = "Option3";
                     break;
+                case EN_OCR_ITEM.OCR_ITEM_FULL:
+                    ret = "Full";
+                    break;
             }
 
             return ret;
@@ -1620,6 +1639,10 @@ namespace SAAL
             else if (item == "Option3")
             {
                 ret = EN_OCR_ITEM.OCR_ITEM_OPT3;
+            }
+            else if (item == "Full")
+            {
+                ret = EN_OCR_ITEM.OCR_ITEM_FULL;
             }
             return ret;
         }
@@ -1659,20 +1682,34 @@ namespace SAAL
                 OperationDialog_updLog("<OCR Processing> Running OCR...", Color.White);
 
                 string temp = OCRHandler(item, processImg.ToImage<Gray, Byte>());
-                Console.WriteLine("AMMAR1 --> " + temp);
                 tempList.Add(temp);
             }
 
             int tempCnt = 0;
             foreach (var grp in tempList.GroupBy(k => k))
             {
-                Console.WriteLine("AMMAR2 --> {0} : {1}", grp.Key, grp.Count());
-                if(grp.Count() > tempCnt)
+                Console.WriteLine("OCR result --> {0} : {1}", grp.Key, grp.Count());
+                // Case for checking resolution
+                if (item == EN_OCR_ITEM.OCR_ITEM_INFO)
                 {
-                    tempCnt = grp.Count();
-                    retStr = grp.Key;
-                    ImageHandler.OperationDialog_updLog("<OCR Post-processing> OCR Highest frequency : " + retStr + " (" +tempCnt + "/10)", Color.White);                                        
+                    if (grp.Count() > tempCnt)
+                    {
+                        tempCnt = grp.Count();
+                        retStr = grp.Key;
+                        ImageHandler.OperationDialog_updLog("<OCR Post-processing> OCR Highest frequency : " + retStr + " (" + tempCnt + "/10)", Color.White);
+                    }
+                    continue;
                 }
+                // Other case
+                else
+                {
+                    if (grp.Count() > tempCnt && grp.Key != "null")
+                    {
+                        tempCnt = grp.Count();
+                        retStr = grp.Key;
+                        ImageHandler.OperationDialog_updLog("<OCR Post-processing> OCR Highest frequency : " + retStr + " (" + tempCnt + "/10)", Color.White);
+                    }
+                }                
             }
             updOpFlag = true;
             return retStr;
@@ -2005,7 +2042,7 @@ namespace SAAL
                     }                    
                     strOut = strInp_split[0] + " " + strOut;
                     break;
-                case EN_OCR_ITEM.OCR_ITEM_LABEL:
+                case EN_OCR_ITEM.OCR_ITEM_OPT1:
                     if (Regex.Match(strInp, @"Close|Cl|ose|C|se|lo").Success)
                         strOut = "Close";
                     break;
@@ -2014,20 +2051,28 @@ namespace SAAL
                         strOut = "CAST";
                     else if (Regex.Match(strInp, @"TV").Success)
                         strOut = "TV";
-                    else if (Regex.Match(strInp, @"HDMIl|HDMI1|I1|1|MII|MIL|IL|II").Success)
+                    else if (Regex.Match(strInp, @"HDMI1|I1|IL|II|11").Success)
                         strOut = "HDMI1";
-                    else if (Regex.Match(strInp, @"HDMI2|I2|2|HDMIZ|IHDMIz|IZ").Success)
+                    else if (Regex.Match(strInp, @"HDMI2|I2|IZ|12").Success)
                         strOut = "HDMI2";
-                    else if (Regex.Match(strInp, @"HDMI3|I3|3").Success)
+                    else if (Regex.Match(strInp, @"HDMI3|I3|13").Success)
                         strOut = "HDMI3";
-                    else if (Regex.Match(strInp, @"HDMI4|I4|4").Success)
+                    else if (Regex.Match(strInp, @"HDMI4|I4|14").Success)
                         strOut = "HDMI4";
-                    else if (Regex.Match(strInp, @"Video|Vdeo|deo|Vito").Success)
+                    else if (Regex.Match(strInp, @"Video|Vdeo|deo|Vito|Who|tho").Success)
                         strOut = "Video";
                     else if (Regex.Match(strInp, @"PC").Success)
                         strOut = "PC";
                     else if (Regex.Match(strInp, @"USB|sb|us").Success)
                         strOut = "USB";
+                    break;
+                case EN_OCR_ITEM.OCR_ITEM_LABEL:
+                    if (Regex.Match(strInp, @"Please|ase|change|cha|source|sou|resolution|res").Success)
+                        strOut = "Please change source resolution";
+                    else if (Regex.Match(strInp, @"No|Signal|sig|slg").Success)
+                        strOut = "No signal";
+                    else
+                        strOut = "null";
                     break;
             }
 
@@ -2625,6 +2670,7 @@ namespace SAAL
                 if (!retBlurTest)
                 {
                     probBitmap = processImg.Clone().Bitmap;
+                    probBitmap.Tag = captureTime;
                     processImg.Dispose();
                     processInfo = new[] { (int)psnrV, (int)(mssimV.V0 * 100), (int)(mssimV.V1 * 100), (int)(mssimV.V2 * 100), (int)data.Variance() };
                     break;
@@ -2903,7 +2949,8 @@ namespace SAAL
             lblOpDialog = new Label();
             lblOpDialog.Text = "Current Status : 0/0";
             lblOpDialog.ForeColor = Color.White;
-            lblOpDialog.Size = new Size(110, 20);
+            lblOpDialog.TextAlign = ContentAlignment.MiddleRight;
+            lblOpDialog.Size = new Size(200, 20);
             fmOperationDialog.Controls.Add(lblOpDialog);
             
             lblOperationDialog.Location = new Point(10, 10);            
@@ -3081,6 +3128,7 @@ namespace SAAL
             frameCapture = new Mat();
 
             videoStop();
+            Thread.Sleep(500);
             Saal.CAM_Init_cv(camName);
             Saal.videoDisplay_cv.SetCaptureProperty(CapProp.FrameWidth, ResSize.Width);
             Saal.videoDisplay_cv.SetCaptureProperty(CapProp.FrameHeight, ResSize.Height);
@@ -3096,6 +3144,7 @@ namespace SAAL
             frameCapture = new Mat();
 
             videoStop();
+            Thread.Sleep(500);
             Saal.CAM_Init_cv(camName);
             Saal.videoDisplay_cv.SetCaptureProperty(CapProp.FrameWidth, ResSize.Width);
             Saal.videoDisplay_cv.SetCaptureProperty(CapProp.FrameHeight, ResSize.Height);
@@ -3143,7 +3192,7 @@ namespace SAAL
             Saal.videoDisplay_cv.Retrieve(frameCapture, 0);
 
             if (frameCapture.IsEmpty)
-                videoReInit();
+                return;
 
             try
             {
@@ -3272,6 +3321,22 @@ namespace SAAL
             }
         }
 
+        public static Bitmap GetBinarialImage_GlobalCrop(Bitmap bmp, double threshold = 0, double maxValue = 255)
+        {
+            using (var processImg = new Image<Bgr, Byte>(bmp))
+            {
+                //Saal.videoDisplay_cv.Retrieve(processImg, 0);
+
+                var grey = GrayScaleHandler(CropImage(EN_OCR_ITEM.OCR_ITEM_FULL, processImg));
+                var binary = GlobalBinarizationHandler(grey, threshold, maxValue);
+
+                var bitmap = binary.Bitmap;
+                grey.Dispose();
+                binary.Dispose();
+                return bitmap;
+            }
+        }
+
         public static double GetBlackPixelPercentage(Bitmap bmp)
         {
             using (var ImageBgr = new Image<Bgr, Byte>(bmp))
@@ -3322,6 +3387,197 @@ namespace SAAL
         }
         #endregion
 
+        #region Color Detection
+        /*
+        private static void ColorDetection()
+        {
+            Mat processImg = new Mat();
+            Saal.videoDisplay_cv.Retrieve(processImg, 0);
+
+            processImg = CropImage(EN_OCR_ITEM.OCR_ITEM_FULL, processImg.ToImage<Bgr, Byte>());
+
+            Image<Gray, Byte> ImageFrameDetection = cvAndHsvImage(processImg.ToImage<Bgr, byte>);
+
+            if (iB2C == 0) imageBox2.Image = ImageFrameDetection;
+
+            if (iB2C == 1)
+            {
+                Image<Bgr, Byte> imgF = new Image<Bgr, Byte>(ImageFrame.Width, ImageFrame.Height);
+                Image<Bgr, Byte> imgD = ImageFrameDetection.Convert<Bgr, Byte>();
+                CvInvoke.cvAnd(ImageFrame, imgD, imgF, IntPtr.Zero);
+                imageBox2.Image = imgF;
+            }
+
+            if (iB2C == 2)
+            {
+                Image<Bgr, Byte> imgF = new Image<Bgr, Byte>(ImageFrame.Width, ImageFrame.Height);
+                Image<Bgr, Byte> imgD = ImageFrameDetection.Convert<Bgr, Byte>();
+                CvInvoke.cvAnd(ImageFrame, imgD, imgF, IntPtr.Zero);
+                for (int x = 0; x < imgF.Width; x++)
+                    for (int y = 0; y < imgF.Height; y++)
+                    {
+                        {
+                            Bgr c = imgF[y, x];
+                            if (c.Red == 0 && c.Blue == 0 && c.Green == 0)
+                            {
+                                imgF[y, x] = new Bgr(255, 255, 255);
+                            }
+                        }
+                    }
+
+                imageBox2.Image = imgF;
+            }
+
+
+            if (checkBox_VAr.Checked) RecDetection(ImageFrameDetection, ImageFrame, trackBar_VAr.Value);
+
+            Image<Gray, Byte> ImageHSVwheelDetection = cvAndHsvImage(
+               ImageHSVwheel,
+               Convert.ToInt32(numeric_HL.Value), Convert.ToInt32(numeric_HH.Value),
+               Convert.ToInt32(numeric_SL.Value), Convert.ToInt32(numeric_SH.Value),
+               Convert.ToInt32(numeric_VL.Value), Convert.ToInt32(numeric_VH.Value),
+               checkBox_EH.Checked, checkBox_ES.Checked, checkBox_EV.Checked, checkBox_IV.Checked);
+            imageBox4.Image = ImageHSVwheelDetection;
+        }
+
+        private static void RecDetection(Image<Gray, Byte> img, Image<Bgr, Byte> showRecOnImg, int areaV)
+        {
+            Image<Gray, Byte> imgForContour = new Image<Gray, byte>(img.Width, img.Height);
+            CvInvoke.cvCopy(img, imgForContour, System.IntPtr.Zero);
+
+
+            IntPtr storage = CvInvoke.cvCreateMemStorage(0);
+            IntPtr contour = new IntPtr();
+
+            CvInvoke.cvFindContours(
+                imgForContour,
+                storage,
+                ref contour,
+                System.Runtime.InteropServices.Marshal.SizeOf(typeof(MCvContour)),
+                Emgu.CV.CvEnum.RETR_TYPE.CV_RETR_EXTERNAL,
+                Emgu.CV.CvEnum.CHAIN_APPROX_METHOD.CV_CHAIN_APPROX_NONE,
+                new Point(0, 0));
+
+
+            Seq<Point> seq = new Seq<Point>(contour, null);
+
+            for (; seq != null && seq.Ptr.ToInt64() != 0; seq = seq.HNext)
+            {
+                Rectangle bndRec = CvInvoke.cvBoundingRect(seq, 2);
+                double areaC = CvInvoke.cvContourArea(seq, MCvSlice.WholeSeq, 1) * -1;
+                if (areaC > areaV)
+                {
+                    CvInvoke.cvRectangle(showRecOnImg, new Point(bndRec.X, bndRec.Y),
+                        new Point(bndRec.X + bndRec.Width, bndRec.Y + bndRec.Height),
+                        new MCvScalar(0, 0, 255), 2, LINE_TYPE.CV_AA, 0);
+                }
+
+            }
+
+        }
+        private static Image<Gray, Byte> cvAndHsvImage(Image<Bgr, Byte> imgFame)
+        {
+            Image<Hsv, Byte> hsvImage = imgFame.Convert<Hsv, Byte>();
+            Image<Gray, Byte> ResultImage = new Image<Gray, Byte>(hsvImage.Width, hsvImage.Height);
+            Image<Gray, Byte> ResultImageH = new Image<Gray, Byte>(hsvImage.Width, hsvImage.Height);
+            Image<Gray, Byte> ResultImageS = new Image<Gray, Byte>(hsvImage.Width, hsvImage.Height);
+            Image<Gray, Byte> ResultImageV = new Image<Gray, Byte>(hsvImage.Width, hsvImage.Height);
+
+            int L1 = 0;
+            int H1 = 255;
+            int L2 = 10;
+            int H2 = 245;
+            int L3 = 20;
+            int H3 = 235;
+
+            Image<Gray, Byte> img1 = inRangeImage(hsvImage, L1, H1, 0);
+            Image<Gray, Byte> img2 = inRangeImage(hsvImage, L2, H2, 1);
+            Image<Gray, Byte> img3 = inRangeImage(hsvImage, L3, H3, 2);
+            Image<Gray, Byte> img4 = inRangeImage(hsvImage, 0, L1, 0);
+            Image<Gray, Byte> img5 = inRangeImage(hsvImage, H1, 180, 0);
+
+            bool H = true;
+            bool I = true;
+            bool S = true;
+            bool V = true;
+
+            if (H)
+            {
+                if (I)
+                {
+                    CvInvoke.BitwiseOr(img4, img5, img4);
+                    ResultImageH = img4;
+                }
+                else { ResultImageH = img1; }
+            }
+
+            if (S) ResultImageS = img2;
+            if (V) ResultImageV = img3;
+
+            if (H && !S && !V) ResultImage = ResultImageH;
+            if (!H && S && !V) ResultImage = ResultImageS;
+            if (!H && !S && V) ResultImage = ResultImageV;
+
+            if (H && S && !V)
+            {
+                CvInvoke.BitwiseAnd(ResultImageH, ResultImageS, ResultImageH);
+                ResultImage = ResultImageH;
+            }
+
+            if (H && !S && V)
+            {
+                CvInvoke.BitwiseAnd(ResultImageH, ResultImageV, ResultImageH);
+                ResultImage = ResultImageH;
+            }
+
+            if (!H && S && V)
+            {
+                CvInvoke.BitwiseAnd(ResultImageS, ResultImageV, ResultImageS);
+                ResultImage = ResultImageS;
+            }
+
+            if (H && S && V)
+            {
+                CvInvoke.BitwiseAnd(ResultImageH, ResultImageS, ResultImageH);
+                CvInvoke.BitwiseAnd(ResultImageH, ResultImageV, ResultImageH);
+                ResultImage = ResultImageH;
+            }
+
+            CvInvoke.Erode(ResultImage, ResultImage, (IntPtr)null, 1);
+
+            return ResultImage;
+        }
+        private static Image<Gray, Byte> inRangeImage(Image<Hsv, Byte> hsvImage, int Lo, int Hi, int con)
+        {
+            Image<Gray, Byte> ResultImage = new Image<Gray, Byte>(hsvImage.Width, hsvImage.Height);
+            Image<Gray, Byte> IlowCh = new Image<Gray, Byte>(hsvImage.Width, hsvImage.Height, new Gray(Lo));
+            Image<Gray, Byte> IHiCh = new Image<Gray, Byte>(hsvImage.Width, hsvImage.Height, new Gray(Hi));
+            CvInvoke.InRange(hsvImage[con], IlowCh, IHiCh, ResultImage);
+            return ResultImage;
+        }
+        private static int[] scaleImage(int wP, int hP)
+        {
+            int[] dR = new int[2];
+            int ra;
+            if (wP != 0)
+            {
+                ra = (100 * 320) / wP;
+                wP = 320;
+                hP = (hP * ra) / 100;
+                if (hP != 0 && hP > 240)
+                {
+                    ra = (100 * 240) / hP;
+                    hP = 240;
+                    wP = (wP * ra) / 100;
+                }
+                dR[0] = wP;
+                dR[1] = hP;
+            }
+            return dR;
+        }
+        */
+        #endregion
+
         #region XML
         private static void XML_fetch_data()
         {
@@ -3346,9 +3602,10 @@ namespace SAAL
                 _item[i].Source = profile.Element("SOURCE").Value.ToString();
                 _item[i].Info = profile.Element("INFO").Value.ToString();
                 _item[i].Label = profile.Element("LABEL").Value.ToString();
-                //_item[i].Opt1 = profile.Element("OPTION1").Value.ToString();
-                //_item[i].Opt2 = profile.Element("OPTION2").Value.ToString();
-                //_item[i].Opt3 = profile.Element("OPTION3").Value.ToString();
+                _item[i].Opt1 = profile.Element("OPTION1").Value.ToString();
+                _item[i].Opt2 = profile.Element("OPTION2").Value.ToString();
+                _item[i].Opt3 = profile.Element("OPTION3").Value.ToString();
+                _item[i].Full = profile.Element("FULL").Value.ToString();
                 i++;
             }
 
@@ -3390,6 +3647,10 @@ namespace SAAL
                     {
                         _item[i].Opt3 = tbOCR_W.Text + ";" + tbOCR_H.Text + ";" + tbOCR_X.Text + ";" + tbOCR_Y.Text;
                     }
+                    else if (cbOCRItemList.Text == "Full")
+                    {
+                        _item[i].Full = tbOCR_W.Text + ";" + tbOCR_H.Text + ";" + tbOCR_X.Text + ";" + tbOCR_Y.Text;
+                    }
                     break;
                 }
                 else if (_item[i].Name == null || _item[i].Name == "")
@@ -3404,6 +3665,7 @@ namespace SAAL
                         _item[i].Opt1 = "10;10;10;10";
                         _item[i].Opt2 = "10;10;10;10";
                         _item[i].Opt3 = "10;10;10;10";
+                        _item[i].Full = "10;10;10;10";
                     }
                     else if (cbOCRItemList.Text == "Label")
                     {
@@ -3413,6 +3675,7 @@ namespace SAAL
                         _item[i].Opt1 = "10;10;10;10";
                         _item[i].Opt2 = "10;10;10;10";
                         _item[i].Opt3 = "10;10;10;10";
+                        _item[i].Full = "10;10;10;10";
                     }
                     else if (cbOCRItemList.Text == "Info")
                     {
@@ -3422,6 +3685,7 @@ namespace SAAL
                         _item[i].Opt1 = "10;10;10;10";
                         _item[i].Opt2 = "10;10;10;10";
                         _item[i].Opt3 = "10;10;10;10";
+                        _item[i].Full = "10;10;10;10";
                     }
                     else if (cbOCRItemList.Text == "Option1")
                     {
@@ -3431,6 +3695,7 @@ namespace SAAL
                         _item[i].Opt1 = tbOCR_W.Text + ";" + tbOCR_H.Text + ";" + tbOCR_X.Text + ";" + tbOCR_Y.Text;
                         _item[i].Opt2 = "10;10;10;10";
                         _item[i].Opt3 = "10;10;10;10";
+                        _item[i].Full = "10;10;10;10";
                     }
                     else if (cbOCRItemList.Text == "Option2")
                     {
@@ -3440,6 +3705,17 @@ namespace SAAL
                         _item[i].Opt1 = "10;10;10;10";
                         _item[i].Opt2 = tbOCR_W.Text + ";" + tbOCR_H.Text + ";" + tbOCR_X.Text + ";" + tbOCR_Y.Text;
                         _item[i].Opt3 = "10;10;10;10";
+                        _item[i].Full = "10;10;10;10";
+                    }
+                    else if (cbOCRItemList.Text == "Full")
+                    {
+                        _item[i].Source = "10;10;10;10";
+                        _item[i].Label = "10;10;10;10";
+                        _item[i].Info = "10;10;10;10";
+                        _item[i].Opt1 = "10;10;10;10";
+                        _item[i].Opt2 = "10;10;10;10";
+                        _item[i].Opt3 = tbOCR_W.Text + ";" + tbOCR_H.Text + ";" + tbOCR_X.Text + ";" + tbOCR_Y.Text;
+                        _item[i].Full = "10;10;10;10";
                     }
                     else if (cbOCRItemList.Text == "Option3")
                     {
@@ -3448,7 +3724,8 @@ namespace SAAL
                         _item[i].Info = "10;10;10;10";
                         _item[i].Opt1 = "10;10;10;10";
                         _item[i].Opt2 = "10;10;10;10";
-                        _item[i].Opt3 = tbOCR_W.Text + ";" + tbOCR_H.Text + ";" + tbOCR_X.Text + ";" + tbOCR_Y.Text;
+                        _item[i].Opt3 = "10;10;10;10";
+                        _item[i].Full = tbOCR_W.Text + ";" + tbOCR_H.Text + ";" + tbOCR_X.Text + ";" + tbOCR_Y.Text;
                     }
                     break;
                 }
@@ -3476,7 +3753,8 @@ namespace SAAL
                     new XElement("INFO", _item[i].Info),
                     new XElement("OPTION1", _item[i].Opt1),
                     new XElement("OPTION2", _item[i].Opt2),
-                    new XElement("OPTION3", _item[i].Opt3)
+                    new XElement("OPTION3", _item[i].Opt3),
+                    new XElement("FULL", _item[i].Full)
                     ));
             }
             xmlFile.Save(XMLfile);
@@ -3494,8 +3772,8 @@ namespace SAAL
             //createNodeGRID("SANYO_55W", "10;10;10;10", "10;10;10;10", "10;10;10;10", writer);
             writer.WriteEndElement();
             writer.WriteStartElement("OCR");
-            createNodeOCR("SANYO_55W", "10;10;10;10", "10;10;10;10", "10;10;10;10", "10;10;10;10", "10;10;10;10", "10;10;10;10", writer);
-            createNodeOCR("PHILIPS_55W", "20;20;20;20", "20;20;20;20", "20;20;20;20", "20;20;20;20", "20;20;20;20", "20;20;20;20", writer);
+            createNodeOCR("SANYO_55W", "10;10;10;10", "10;10;10;10", "10;10;10;10", "10;10;10;10", "10;10;10;10", "10;10;10;10", "10;10;10;10", writer);
+            createNodeOCR("PHILIPS_55W", "20;20;20;20", "20;20;20;20", "20;20;20;20", "20;20;20;20", "20;20;20;20", "20;20;20;20", "20;20;20;20", writer);
             writer.WriteEndElement();
             writer.WriteEndElement();
             writer.WriteEndDocument();
@@ -3503,7 +3781,7 @@ namespace SAAL
 
         }
 
-        private static void createNodeOCR(string Item1, string Item2, string Item3, string Item4, string Item5, string Item6, string Item7, XmlTextWriter writer)
+        private static void createNodeOCR(string Item1, string Item2, string Item3, string Item4, string Item5, string Item6, string Item7, string Item8, XmlTextWriter writer)
         {
             // Item1 : Name
             // Item2 : Source
@@ -3531,10 +3809,13 @@ namespace SAAL
             writer.WriteStartElement("OPTION3");
             writer.WriteString(Item7);
             writer.WriteEndElement();
+            writer.WriteStartElement("FULL");
+            writer.WriteString(Item8);
+            writer.WriteEndElement();
             writer.WriteEndElement();
         }
 
-        private static void createNodeGRID(string Item1, string Item2, string Item3, string Item4, string Item5, string Item6, string Item7, XmlTextWriter writer)
+        private static void createNodeGRID(string Item1, string Item2, string Item3, string Item4, string Item5, string Item6, string Item7, string Item8, XmlTextWriter writer)
         {
 
         }

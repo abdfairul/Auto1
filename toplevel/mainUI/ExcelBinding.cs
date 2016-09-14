@@ -17,6 +17,8 @@ namespace mainUI
         private int ResultPosX;
         private int TesterPosX;
         private int VerPosX;
+        private int DatePosX;
+        private int RemarkPosX;
         private EN_FILE_STATE fs;
 
         #region Public Definition
@@ -52,6 +54,8 @@ namespace mainUI
             ResultPosX = 0;
             TesterPosX = 0;
             VerPosX = 0;
+            DatePosX = 0;
+            RemarkPosX = 0;
             fs = EN_FILE_STATE.FILE_STATE_EMPTY;
 
             return true;
@@ -130,7 +134,7 @@ namespace mainUI
             return dtContent;
         }
 
-        public Boolean save_data(List<string> NoToSave, List<string> ResultToSave, List<string> VerToSave, List<string> TesterToSave)
+        public Boolean save_data(List<string> NoToSave, List<string> ResultToSave, List<string> VerToSave, List<string> TesterToSave, List<string> DateToSave, List<string> RemarkToSave)
         {
             Console.WriteLine("ExcelBinding:save_data >> File Name : " + FileNameSearch);
             //String strExcelConn = "provider=Microsoft.Jet.OLEDB.4.0;Data Source="+FileNameSearch+";Extended Properties=\"Excel 8.0;HDR=No;IMEX=1\"";
@@ -156,11 +160,11 @@ namespace mainUI
                     switch(fs)
                     {
                         case EN_FILE_STATE.FILE_STATE_LOAD:
-                            cmdStr = "UPDATE [" + SheetNameTrim + "$] SET F" + ResultPosX + " = '" + ResultToSave[j].ToString() + "', F" + VerPosX + " = '" + VerToSave[j].ToString() + "', F" + TesterPosX + " = '" + TesterToSave[j].ToString() + "' where F2 = '" + NoToSave[j].ToString() + "'";
+                            cmdStr = "UPDATE [" + SheetNameTrim + "$] SET F" + ResultPosX + " = '" + ResultToSave[j].ToString() + "', F" + VerPosX + " = '" + VerToSave[j].ToString() + "', F" + TesterPosX + " = '" + TesterToSave[j].ToString() + "', F" + DatePosX + " = '" + DateToSave[j].ToString() + "', F" + RemarkPosX + " = '" + RemarkToSave[j].ToString() + "' where F2 = '" + NoToSave[j].ToString() + "'";
                             //i++;
                             break;
                         case EN_FILE_STATE.FILE_STATE_SAVEAS:
-                            cmdStr = "UPDATE [" + SheetNameTrim + "] SET F" + (ResultPosX - 1) + " = '" + ResultToSave[j].ToString() + "', F" + (VerPosX - 1) + " = '" + VerToSave[j].ToString() + "', F" + (TesterPosX - 1) + " = '" + TesterToSave[j].ToString() + "' where F1 = '" + NoToSave[j].ToString() + "'";
+                            cmdStr = "UPDATE [" + SheetNameTrim + "] SET F" + (ResultPosX - 1) + " = '" + ResultToSave[j].ToString() + "', F" + (VerPosX - 1) + " = '" + VerToSave[j].ToString() + "', F" + (TesterPosX - 1) + " = '" + TesterToSave[j].ToString() + "', F" + (DatePosX - 1) + " = '" + DateToSave[j].ToString() + "', F" + (RemarkPosX - 1) + " = '" + RemarkToSave[j].ToString() + "' where F1 = '" + NoToSave[j].ToString() + "'";
                             //i++;
                             break;
                         default:
@@ -262,6 +266,7 @@ namespace mainUI
 
         private DataTable modify_data(DataTable dtContent)
         {
+            bool colZeroStart = false;
             // Delete unnecessary rows  
             foreach (DataRow dr1 in dtContent.Rows)
             {
@@ -270,6 +275,9 @@ namespace mainUI
                 Match match2 = regex.Match(dr1[1].ToString()); // Find reg pattern in 2nd column
                 if (!(match1.Success || match2.Success)) 
                 {
+                    if (match1.Success)
+                        colZeroStart = true;
+
                     // Delete row if cannot find reg pattern in 1st or 2nd column
                     dr1.Delete();
                 }
@@ -286,10 +294,28 @@ namespace mainUI
                 MessageBox.Show("Please check test sheet format");
                 return dtContent;
             }
-            
+
             int tempResultPosX = 1;
             int tempTesterPosX = 1;
             int tempVerPosX = 1;
+            int tempDatePosX = 1;
+            int tempRemarkPosX = 1;
+            // Check if first column empty
+            if (!colZeroStart)
+            {
+                dtContent.Columns.RemoveAt(0);
+                tempResultPosX = tempResultPosX + 1; // Add result pos x when deleting empty column
+                tempTesterPosX = tempTesterPosX + 1; // Add tester pos x when deleting empty column
+                tempVerPosX = tempVerPosX + 1; // Add ver pos x when deleting empty column
+                tempDatePosX = tempDatePosX + 1; // Add date pos x when deleting empty column
+                tempRemarkPosX = tempRemarkPosX + 1; // Add remark pos x when deleting empty column
+            }       
+            
+            ResultPosX = 0;
+            TesterPosX = 0;
+            VerPosX = 0;
+            DatePosX = 0;
+            RemarkPosX = 0;
             for (int i = 0; i < dtContent.Columns.Count; i++)
             {
                 if (dtContent.Rows[0][i].ToString() == "Result")
@@ -300,10 +326,18 @@ namespace mainUI
                 {
                     TesterPosX = tempTesterPosX + i;
                 }
-                else if (dtContent.Rows[0][i].ToString() == "Ver.")
+                else if (dtContent.Rows[0][i].ToString() == "Ver." || dtContent.Rows[0][i].ToString() == "Ver")
                 {
                     VerPosX = tempVerPosX + i;
                 }
+                else if (dtContent.Rows[0][i].ToString() == "Date" || dtContent.Rows[0][i].ToString() == "Test Date")
+                {
+                    DatePosX = tempDatePosX + i;
+                }
+                else if (dtContent.Rows[0][i].ToString() == "Remark" || dtContent.Rows[0][i].ToString() == "Remarks")
+                {
+                    RemarkPosX = tempRemarkPosX + i;
+                }                
 
                 bool[] needRemoval = new bool[dtContent.Rows.Count];
                 for (int j = 0; j < dtContent.Rows.Count; j++)
@@ -319,6 +353,8 @@ namespace mainUI
                     tempResultPosX = tempResultPosX + 1; // Add result pos x when deleting empty column
                     tempTesterPosX = tempTesterPosX + 1; // Add tester pos x when deleting empty column
                     tempVerPosX = tempVerPosX + 1; // Add ver pos x when deleting empty column
+                    tempDatePosX = tempDatePosX + 1; // Add date pos x when deleting empty column
+                    tempRemarkPosX = tempRemarkPosX + 1; // Add remark pos x when deleting empty column
                 }
             }
 

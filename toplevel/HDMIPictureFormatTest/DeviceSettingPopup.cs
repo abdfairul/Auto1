@@ -12,55 +12,92 @@ namespace Test
 {
     public partial class DeviceSettingPopup : UserControl
     {
+        public enum UARTorLAN
+        {
+            UART,
+            LAN
+        }
+        
+        public struct Switcher
+        {
+            public Switcher(UARTorLAN i, string port, string ip)
+            {
+                IsUarTorLan = i;
+                comPort = port;
+                ipAddress = ip;
+            } 
+
+            public UARTorLAN IsUarTorLan;
+            public string comPort;
+            public string ipAddress;
+        }
+
+
         public string lanValue = "";
         public string UARTValue = "";
-        public bool isUART = true ;
+        
 
         /// <summary>
-        /// device name, isUART, UART or IP
+        /// device name, isUART, comPort or IP
         /// </summary>
-        public Dictionary<string, KeyValuePair<bool, string>> switchDictionary;
+        public Dictionary<string, Switcher> switchDictionary;
 
         public DeviceSettingPopup()
         {
             InitializeComponent();
+            
+            switchDictionary = new Dictionary<string, Switcher>();
 
-            isUART = UARTradioButton.Checked;
-
-            switchDictionary = new Dictionary<string, KeyValuePair<bool, string>>();
-
-            switchDictionary.Add("TG45", new KeyValuePair<bool, string>());
-            switchDictionary.Add("TG59", new KeyValuePair<bool, string>());
-        }
-
-        private void saveButton_Click(object sender, EventArgs e)
-        {
-            UpdateValue().Hide();
+            switchDictionary.Add("TG45", new Switcher(UARTorLAN.UART,"COM1", "192.168.1.1"));
+            switchDictionary.Add("TG59", new Switcher(UARTorLAN.UART, "COM1", "192.168.1.1"));
         }
 
         private void radioButton_CheckedChanged(object sender, EventArgs e)
         {
             var radioButton = sender as RadioButton;
-            isUART = radioButton.Text == "UART" && radioButton.Checked;  
-            LANtextBox.ReadOnly = !isUART;
+            //1. check current label
+            //2. update value based on active label
 
-            UpdateValue();
+            if (radioButton.Checked)
+            {
+                LANtextBox.ReadOnly = radioButton.Text == "UART";
+                UpdateCurrentLabelValue();
+            }
+            
         }
 
-        private Control UpdateValue()
+        public void UpdateCurrentLabelValue()
         {
             lanValue = LANtextBox.Text;
-            UARTValue = UARTtextBox.Text;  
+            UARTValue = UARTtextBox.Text;
 
-            var value = isUART ? UARTValue : lanValue;
+            var uartorlan = UARTradioButton.Checked ? UARTorLAN.UART : UARTorLAN.LAN;
 
-            var keyPair = new KeyValuePair<bool, string>(isUART, value);
-            var dialog = ((Control)this).Parent;
+            switchDictionary[label1.Text] = new Switcher(uartorlan, UARTValue, lanValue);
+        }
 
-            if (switchDictionary.ContainsKey(dialog.Text))
-                switchDictionary[dialog.Text] = keyPair;
+        private void Popup_VisibleChanged(object sender, EventArgs e)
+        {
+            var control = sender as DeviceSettingPopup;
+            
+            if (control.Visible)
+            {
+                var value = switchDictionary[control.label1.Text];
 
-            return dialog;
+                UARTradioButton.CheckedChanged -= radioButton_CheckedChanged;
+                LANradioButton.CheckedChanged -= radioButton_CheckedChanged;
+
+                UARTradioButton.Checked = value.IsUarTorLan == UARTorLAN.UART;
+                LANradioButton.Checked = !UARTradioButton.Checked;
+                LANtextBox.ReadOnly = !LANradioButton.Checked;
+
+                UARTradioButton.CheckedChanged += radioButton_CheckedChanged;
+                LANradioButton.CheckedChanged += radioButton_CheckedChanged;
+
+                UARTtextBox.Text = value.comPort;
+                LANtextBox.Text = value.ipAddress;
+            }
+              
         }
     }
 }

@@ -48,22 +48,44 @@ namespace Test
         private class RowIndexData
         {
             /// <summary>
-            /// hdmi_key, hdmi_value, hdmi_raw
+            /// row, cmd, raw
             /// </summary>
             public Triplet<int, string, string> HDMIFormat;
             /// <summary>
-            /// color_key, color_value, color_raw
+            /// row, cmd, raw
             /// </summary>
-            public Triplet<int, string, string> colorSpace;
+            public Triplet<int, string, string> frequency;
+            /// <summary>
+            /// row, cmd, raw
+            /// </summary>
+            public Triplet<int, string, string> colorType;
+            /// <summary>
+            /// row, cmd, raw
+            /// </summary>
             public KeyValuePair<int, string> operation;
             public KeyValuePair<int, string> expected;
+
+
+            //var samplingIndex = "";
 
             public RowIndexData()
             {
                 HDMIFormat = new Triplet<int, string, string>((int)RowIndex.HdmiFormat, "", "");
-                colorSpace = new Triplet<int, string, string>((int)RowIndex.ColorSpace, "", "");
+                frequency = new Triplet<int, string, string>((int)RowIndex.Frequency, "", "");
+                colorType = new Triplet<int, string, string>((int)RowIndex.ColorSpace, "", "");
+
                 operation = new KeyValuePair<int, string>((int)RowIndex.Operation, "");
                 expected = new KeyValuePair<int, string>((int)RowIndex.Expected, "");
+            }
+
+            public RowIndexData(RowIndexData other)
+            {
+                HDMIFormat = new Triplet<int, string, string>(other.HDMIFormat);
+                frequency = new Triplet<int, string, string>(other.frequency);
+                colorType = new Triplet<int, string, string>(other.colorType);
+
+                operation = other.operation;
+                expected = other.expected;
             }
         }
 
@@ -78,19 +100,34 @@ namespace Test
             public A vA { get; set; }
             public B vB { get; set; }
             public C vC { get; set; }
+
+            public Triplet(Triplet<A, B, C> other)
+            {
+                vA = other.vA;
+                vB = other.vB;
+                vC = other.vC;
+            }
         }
 
         private struct DeviceSettings
         {
-            //public String DevName; // eg) TG45, TG59
-            public String PortID; // eg) COM1 / 192.168.1.0
-            public EN_CON_METHOD Con_Method; // EN_CON_METHOD (Uart/Lan)
-            public Boolean Con_Status;
+            /// <summary>
+            /// eg) COM1 / 192.168.1.0
+            /// </summary>
+            public String conValue;
+            /// <summary>
+            /// EN_CON_METHOD (Uart/Lan)
+            /// </summary>
+            public EN_CON_METHOD conMethod;
+            /// <summary>
+            /// connected?
+            /// </summary>
+            public Boolean conStatus;
         }
 
         private class ProgressBarStuff
         {
-            private const int Period1stRow = 6; // in secs
+            private const int Period1stRow = 15; // in secs
             private Stopwatch rowStopwatch = new Stopwatch();
             private Stopwatch totalStopwatch = new Stopwatch();
             private BackgroundWorker bgWorker;
@@ -113,7 +150,7 @@ namespace Test
                     progressBar.camPictureBox.Image = value;
                 }
             }
-            
+
             public Bitmap refImage
             {
                 set
@@ -150,7 +187,7 @@ namespace Test
                     timer.Enabled = false;
                 };
 
-                timer.Interval = 1000;
+                timer.Interval = 997;
                 timerForceRefresh.Interval = 100;
 
                 timer.Elapsed += (sender, args) =>
@@ -164,8 +201,7 @@ namespace Test
                     percent = percent > 99 ? 99 : percent;
                     remaining = remaining < 1 ? 1 : remaining;
 
-                    var someString = new[] { remaining.ToString(), logger };
-
+                    var someString = remaining.ToString();
                     if (bgWorker != null && !bgCompleted)
                     {
                         bgWorker.ReportProgress((int)percent, someString);
@@ -175,6 +211,14 @@ namespace Test
                 timerForceRefresh.Elapsed += (sender, args) =>
                 {
                     progressBar.camPictureBox.Invoke(new Action((() => progressBar.camPictureBox.Refresh())));
+
+                    progressBar.label2.Invoke(new Action(() =>
+                    {
+                        progressBar.label2.Text = logger;
+                        progressBar.label2.Refresh();
+                    }));
+                    
+
                 };
 
             }
@@ -234,15 +278,14 @@ namespace Test
             {
                 progressBar.progressBar1.Value = e.ProgressPercentage;
 
-                var strings = e.UserState as string[];
-                var remaining = Convert.ToDouble(strings[0]);
+                var str0 = e.UserState as string;
+                var remaining = Convert.ToDouble(str0);
                 var remainingTimeSpan = TimeSpan.FromSeconds(remaining);
 
                 var str = remaining > 60
                     ? (remainingTimeSpan.Minutes + " min, " + remainingTimeSpan.Seconds + " sec")
                     : remaining + " sec";
-                progressBar.label2.Text = strings[1];
-                progressBar.total_time.Text = str;
+                  progressBar.total_time.Text = str;
                 progressBar.Refresh();
             }
 
@@ -257,12 +300,13 @@ namespace Test
                     var name = row.Cells[0].EditedFormattedValue.ToString();
 
                     // 1.1 to add little leverage
+                    //8sec here for sendallcommand totalt
                     if (str.Contains("The image is seen for 3 minutes."))
-                        rowindexTimeName.Add(new Triplet<int, int, string>(i, 
-                            (int)((double)((ImageHandler.SimilarityTestPeriod * 1.1) / 1000)), name));
+                        rowindexTimeName.Add(new Triplet<int, int, string>(i,
+                            (int)(((ImageHandler.SimilarityTestPeriod * 1.1) / 1000) + 8), name));
                     else
-                        rowindexTimeName.Add(new Triplet<int, int, string>(i, 
-                            (int)((Period1stRow * 1.1)), name));
+                        rowindexTimeName.Add(new Triplet<int, int, string>(i,
+                            (int)((Period1stRow * 1.1) + 8), name));
                 }
 
                 foreach (var i in rowindexTimeName)
@@ -297,6 +341,7 @@ namespace Test
         private enum RowIndex
         {
             HdmiFormat = 2,
+            Frequency = 4,
             ColorSpace = 5,
             Operation = 7,
             Expected = 8,
@@ -308,11 +353,11 @@ namespace Test
         #endregion
 
         #region Member: Generic
-
         private RibbonTab equipmentSetting;
         private Bitmap _blankImg;
         private List<string> _colorList;
         private RowIndexData _rowIndexData = new RowIndexData();
+        private RowIndexData _previousrowIndexData = new RowIndexData();
         private string _executionTime;
         private readonly SAAL_Interface Saal = new SAAL_Interface();
         private DataGridViewRow toExecute;
@@ -320,7 +365,7 @@ namespace Test
         private static int binaryThreshold = 70;
         private ProgressBarStuff progressBarStuff;
         private TextBox[] testerInfos = new TextBox[2];
-
+        private string previousColor = "";
         #endregion
 
         #region Member: Device 
@@ -340,10 +385,8 @@ namespace Test
         private ComboBox cbCamList;
         private Button btOnOffCam;
         private Button btCamCalib;
-        private cameraPopupForm cameraPopup;
         private readonly int ResWidth = 800;
         private readonly int ResHeight = 600;
-        private bool show_v_color_guideline = false;
         #endregion
 
         #region Member: Public properties
@@ -400,6 +443,11 @@ namespace Test
             devicePopup = new Popup(new DeviceSettingPopup());
             devicePopup.FocusOnOpen = false;
             devicePopup.AutoClose = true;
+            devicePopup.Closing += (s, o) => {
+                var dVP = devicePopup.Content as DeviceSettingPopup;
+                dVP.UpdateCurrentLabelValue();
+
+            };
 
             equipmentSetting = new RibbonTab();
             equipmentSetting.Text = "HDMI Picture Test";
@@ -429,20 +477,14 @@ namespace Test
                 {
                     var cBox = sender as CheckBox;
 
-                    if (cBox.BackColor != Color.Red && cBox.BackColor != Color.Green)
-                    {
-                        MessageBox.Show("Please do \"Test connection\" first");
-                        return;
-                    }
-
                     if (cBox.BackColor == Color.Green)
                     {
                         foreach (var j in cbEquipment)
                         {
                             bool k = cBox.Text.Equals(j.Text);
                             var dS = _deviceSettings[j.Text];
-                            j.BackColor = k && dS.Con_Status ? Color.Green : Color.Red;
-                            dS.Con_Status = k && dS.Con_Status;
+                            j.BackColor = k && dS.conStatus ? Color.Green : Color.Red;
+                            dS.conStatus = k && dS.conStatus;
                             _deviceSettings[j.Text] = dS;
                         }
                     }
@@ -546,21 +588,10 @@ namespace Test
             Picture.Image = null;
             Picture.Size = new Size(100, 50);
             Picture.SizeMode = PictureBoxSizeMode.StretchImage;
-            Picture.DoubleClick += pictureBox_DoubleClick;
-            Picture.Tag = "Double click to open Viewfinder";
             Picture.UpdateStatusBar_MouseEvents();
             var pictureBoxHost = new RibbonHost();
             pictureBoxHost.HostedControl = Picture;
             pictureBoxHost.ToolTip = "Click to enlarge";
-
-            cameraPopup = new cameraPopupForm(PanelItem_Click);
-            cameraPopup.Text = "Viewfinder";
-            cameraPopup.ClientSize = new Size(ResWidth, ResHeight);
-            cameraPopup.MaximizeBox = false;
-            cameraPopup.ControlBox = true;
-            cameraPopup.FormBorderStyle = FormBorderStyle.FixedSingle;
-            cameraPopup.FormClosing += CameraPopupFormClosing;
-            cameraPopup.StartPosition = FormStartPosition.CenterScreen;
 
             var panelCam = new Panel();
             panelCam.Size = new Size(100, 50);
@@ -783,61 +814,119 @@ namespace Test
 
         #region Execution Handler
 
-        private bool SendCommandSetFormat(string i_hdmi_format)
-        {
-            var result = false;
-            foreach (var i in _deviceSettings)
-            {
-                if (i.Value.Con_Status)
-                {
-                    result = Saal.TG45_59_SetFormat(i_hdmi_format, i.Value.PortID, true);
-                    break;
-                }
-
-            }
-
-            return result;
-        }
-
-        private bool SendCommandSetColorSpace(string i_smpl)
+        private bool SendCommandTG4559(string i_strCmd)
         {
             bool retVal = false;
             string retStr = string.Empty;
-            string strCmd = "003_vid " + i_smpl + " 0" + " 1";
-            string commport = string.Empty;
+            string conValue = string.Empty;
             bool isUART = false;
-
-            //return Saal.TG45_59_SendCmd(strCmd);
 
             foreach (var i in _deviceSettings)
             {
-                if (i.Value.Con_Status)
+                if (i.Value.conStatus)
                 {
-                    commport = i.Value.PortID;
-                    isUART = i.Value.Con_Method == EN_CON_METHOD.CON_UART;
+                    conValue = i.Value.conValue;
+                    isUART = i.Value.conMethod == EN_CON_METHOD.CON_UART;
                     break;
                 }
             }
 
-            if (commport.Equals(string.Empty))
+            if (conValue.Equals(string.Empty))
                 return false;
 
             if (isUART)
             {
-                Saal.TG45_59_Setup(commport, 115200);
-                retStr = Saal.TG45_59_SendCmd(strCmd);
+                Saal.TG45_59_Setup(conValue, 115200);
+                retStr = Saal.TG45_59_SendCmd(i_strCmd + "\n");
                 retVal = retStr.Contains("OK");
                 Saal.TG45_59_ClosePort();
             }
             else
             {
-                Saal.TG45_59_Lan_Setup(commport);
-                retStr = Saal.TG45_59_Lan_SendCmd(strCmd);
+                Saal.TG45_59_Lan_Setup(conValue);
+                retStr = Saal.TG45_59_Lan_SendCmd(i_strCmd + "\n");
                 retVal = retStr.Contains("OK");
                 Saal.TG45_59_Lan_Close();
             }
 
             return retVal;
+        }
+
+        private string SendAllCommand()
+        {
+            // set 8 sec
+            int sleepTime = 8000 / 4;
+
+            var hdmiFormat = _rowIndexData.HDMIFormat.vB;
+            var freqIndex = _rowIndexData.frequency.vB;
+
+            var colorIndex = Regex.IsMatch(_rowIndexData.colorType.vB, @"RGB") ? "0" : "1";
+            var samplingIndex = !Regex.IsMatch(_rowIndexData.colorType.vB, @"4:2:2") ? "0" : "1";
+
+            //1. set resolution
+            // check if the previous is the same, then no need to change
+            if (!_previousrowIndexData.HDMIFormat.vB.Equals(_rowIndexData.HDMIFormat.vB))
+            {
+                foreach (var i in _deviceSettings)
+                {
+                    if (i.Value.conStatus)
+                    {
+                        if (!Saal.TG45_59_SetFormat(hdmiFormat,
+                            i.Value.conValue,
+                            i.Value.conMethod == EN_CON_METHOD.CON_UART))
+                            return "Set resolution failed";
+
+                        break;
+                    }
+                }
+
+            }
+
+
+
+            //2. set frequency (60/1 or 59.94/1.0001)
+            // check if the previous is the same, then no need to change
+            Thread.Sleep(sleepTime);
+
+            if (!_previousrowIndexData.frequency.vB.Equals(_rowIndexData.frequency.vB))
+            {
+                string strCmd = "mfrq " + freqIndex;
+                if (!SendCommandTG4559(strCmd))
+                    return "Set frequency modifier failed";
+            }
+
+
+
+            //3. set color (YCbCr or RGB)
+            Thread.Sleep(sleepTime);
+            if (!_previousrowIndexData.colorType.vB.Equals(_rowIndexData.colorType.vB))
+            {
+                string strCmd = "chgcol " + colorIndex;
+                if (!SendCommandTG4559(strCmd))
+                    return "Set color failed";
+            }
+
+            //4. set sampling (444 pr 442)
+            Thread.Sleep(sleepTime);
+
+            if (!_previousrowIndexData.colorType.vB.Equals(_rowIndexData.colorType.vB))
+            {
+                //note: assume bit is 8bit (0, 2nd param)
+                string strCmd = "003_vid " + samplingIndex + "," + "0" + "," + "1";
+                if (!SendCommandTG4559(strCmd))
+                    return "Set color sampling failed";
+            }
+
+            //5. set color bar
+            Thread.Sleep(sleepTime);
+
+
+                string strCmd1 = "sg 1,0,4";
+                if (!SendCommandTG4559(strCmd1))
+                    return "Set colobar failed";
+   
+
+            return "OK";
         }
 
         #endregion
@@ -849,27 +938,25 @@ namespace Test
                 var value = _deviceSettings[i.Key];
 
                 var dVP = devicePopup.Content as DeviceSettingPopup;
-                var conMethod = dVP.switchDictionary[i.Key];
+                var deviceProp = dVP.switchDictionary[i.Key];
 
-                if (conMethod.Key) // is uart
-                    value.Con_Method = EN_CON_METHOD.CON_UART;
-                else
-                    value.Con_Method = EN_CON_METHOD.CON_LAN;
+                value.conMethod = deviceProp.IsUarTorLan == DeviceSettingPopup.UARTorLAN.UART ?
+                    EN_CON_METHOD.CON_UART : EN_CON_METHOD.CON_LAN;
 
-                switch (value.Con_Method)
+                switch (value.conMethod)
                 {
                     case EN_CON_METHOD.CON_UART:
                         {
                             if (testUARTBypass)
                             {
-                                value.PortID = "COM1";
-                                value.Con_Status = true;
+                                value.conValue = deviceProp.comPort;
+                                value.conStatus = true;
                             }
                             else
                             {
                                 string resPort = Saal.TG45_59_TestPerCon(i.Key);
-                                value.PortID = resPort;
-                                value.Con_Status = resPort != "";
+                                value.conValue = resPort;
+                                value.conStatus = resPort != "";
                             }
 
                             _deviceSettings[i.Key] = value;
@@ -879,11 +966,14 @@ namespace Test
                         {
                             if (testUARTBypass) // for test
                             {
-                                value.PortID = "127.0.0.1";
-                                value.Con_Status = true;
+                                value.conValue = deviceProp.ipAddress;
+                                value.conStatus = true;
                             }
                             else
-                                value.Con_Status = Saal.TG45_59_Lan_TestPerCon(value.PortID);
+                            {
+                                value.conValue = deviceProp.ipAddress;
+                                value.conStatus = Saal.TG45_59_Lan_TestPerCon(value.conValue);
+                            }
 
                             _deviceSettings[i.Key] = value;
                             break;
@@ -897,7 +987,7 @@ namespace Test
             var valid_single = new List<bool>();
             foreach (var j in cbEquipment)
             {
-                var ok = _deviceSettings[j.Text].Con_Status;
+                var ok = _deviceSettings[j.Text].conStatus;
                 j.BackColor = ok ? Color.Green : Color.Red;
 
                 if (ok) valid_single.Add(ok);
@@ -949,11 +1039,6 @@ namespace Test
             return new[] { imagesFolder, _executionTime };
         }
 
-
-
-        private string previousColor = "";
-
-
         private void DataRowProcess()
         {
             if (progressBarStuff.CancellationPending)
@@ -961,52 +1046,32 @@ namespace Test
 
             var rowName = progressBarStuff.BeginOneIteration(toExecute.Index);
 
-            CollectRowIndexData();
+            _previousrowIndexData = new RowIndexData(_rowIndexData);
 
-            
+            if (!CollectRowIndexData())
+            {
+                MessageBox.Show("Invalid Input.\nPlease select from row with valid input and extend from there", "Error",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
 
             //send commands
             if (!testUARTBypass)
             {
-                SendCommandSetFormat(_rowIndexData.HDMIFormat.vB);
-                Thread.Sleep(1000);
-                SendCommandSetColorSpace(_rowIndexData.colorSpace.vB);
-                Thread.Sleep(1000);
+                var result = SendAllCommand();
+                if (!result.Equals("OK"))
+                {
+                    MessageBox.Show(result + "\n" + "Test #" + rowName,
+                        "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
             }
-
-            // wait for TV to start
-            Thread.Sleep(3000);
-
-            // process result
-            // get current frame image
 
             var currentImage = new Bitmap(ImageHandler.CurrentFrame);
 
-            if (!previousColor.Equals(_rowIndexData.colorSpace.vB))
+            Action<bool, Bitmap[], Bitmap> commonAction = (result, bitmapArray, bitmapCell) =>
             {
-                currentImage.Tag = "Time taken: " + DateTime.Now;
-                var refBitmap = new Bitmap(currentImage) {Tag = currentImage.Tag};
-                progressBarStuff.refImage = refBitmap;
-            }
-            else
-            {
-                currentImage.Dispose();
-                currentImage = new Bitmap(progressBarStuff.refImage) {Tag = progressBarStuff.refImage.Tag};
-            }
-
-            previousColor = _rowIndexData.colorSpace.vB;
-
-            Action okAction = () =>
-            {
-                toExecute.Cells[(int)RowIndex.Result].Value = "OK";
-                var greenmark = Resource.greenmark;
-                var resizedImage = new Bitmap(greenmark,
-                    toExecute.Cells[toExecute.DataGridView.ColumnCount - 1].Size);
-                toExecute.Cells[toExecute.DataGridView.ColumnCount - 1].Value = resizedImage;
-            };
-            Action<Bitmap[], Bitmap> ngAction = (bitmapArray, bitmapCell) =>
-            {
-                toExecute.Cells[(int)RowIndex.Result].Value = "NG1";
+                toExecute.Cells[(int)RowIndex.Result].Value = result? "OK" : "NG1";
                 var imageFolderPath = _SaveImagesToOutputFolder(bitmapArray, rowName);
 
                 var resizedImage = new Bitmap(bitmapCell,
@@ -1021,23 +1086,31 @@ namespace Test
                 var str = "Test #[" + rowName + "] : Checking if screen is black of not...";
                 progressBarStuff.logger = str;
 
+                // wait for TV to start
+                Thread.Sleep(10000);
+
                 //- check if image is displayed. - compare with
-                //TODO: check color space by reading from device?
                 var binaryImage = ImageHandler.GetBinarialImage_Global(currentImage, binaryThreshold);
                 var blackPercent = (int)ImageHandler.GetBlackPixelPercentage(binaryImage);
 
                 Thread.Sleep(1000);
 
-                if (blackPercent > blackPixelThreshold)
-                {
-                    ImageHandler.drawWatermark(ref currentImage, @"Reference image");
-                    ImageHandler.drawWatermark(ref currentImage, currentImage.Tag as string, 18, new Size(0, currentImage.Height - 20));
-                    ImageHandler.drawWatermark(ref binaryImage, @"Problematic image from Binary Test : ( " + blackPercent + "% Black pixels )");
-                    ngAction(new[] { currentImage, binaryImage }, binaryImage);
-                }
-                else
-                    okAction();
+                var refImage = new Bitmap(progressBarStuff.refImage);
+                refImage.Tag = progressBarStuff.refImage.Tag;
 
+                ImageHandler.drawWatermark(ref refImage, @"Reference image");
+                ImageHandler.drawWatermark(ref refImage, refImage.Tag as string, 18,
+                    new Size(0, refImage.Height - 20));
+
+                var result = blackPercent > blackPixelThreshold;
+                var conditionalText = result? @"OK " : @"NOT OK ";
+
+                ImageHandler.drawWatermark(ref binaryImage,
+                     conditionalText + "image from Binary Test : ( " + blackPercent + "% Black pixels )");
+
+                commonAction(result, new[] { refImage, binaryImage }, binaryImage);
+
+                refImage.Dispose();
                 currentImage.Dispose();
                 binaryImage.Dispose();
             }
@@ -1046,9 +1119,9 @@ namespace Test
             {
                 //- check if image is seen 3 minutes 
                 // this check for 3 minutes, 100ms threshold.
-
-
                 progressBarStuff.logger = "Test #[" + rowName + "] : Checking image for blurriness and disorder...";
+
+                Thread.Sleep(1000);
 
                 var problematicBitmap = new Bitmap(ResWidth, ResHeight);
                 var errorInfo = new object();
@@ -1065,29 +1138,29 @@ namespace Test
                     return;
                 }
 
-                if (!testResult)
-                {
-                    var bools = errorInfo as bool[];
+                var bools = errorInfo as bool[];
 
-                    var str = (!bools[0]) ? @"Similarity Test" : @"Blurry Test";
-                    var info = processInfo as int[];
+                var str = (!bools[0]) ? @"Similarity Test" : @"Blurry Test";
+                var info = processInfo as int[];
 
-                    ImageHandler.drawWatermark(ref currentImage, @"Reference image");
-                    ImageHandler.drawWatermark(ref currentImage, currentImage.Tag as string, 18, new Size(0, currentImage.Height - 20));
-                    ImageHandler.drawWatermark(ref problematicBitmap, problematicBitmap.Tag as string, 18, new Size(0, problematicBitmap.Height - 20));
+                var refImage = new Bitmap(progressBarStuff.refImage);
+                refImage.Tag = progressBarStuff.refImage.Tag;
 
-                    if (!bools[0])
-                        ImageHandler.drawWatermark(ref problematicBitmap,
-                            @"Problematic image from Similarity Test: " + "( P:" + info[0] + " ; M:" + info[1] + "," + info[2] + "," + info[3] + " )");
-                    else
-                        ImageHandler.drawWatermark(ref problematicBitmap,
-                            @"Problematic image from Blurry Test: " + "( " + info[4] + " )");
+                ImageHandler.drawWatermark(ref refImage, @"Reference image");
+                ImageHandler.drawWatermark(ref refImage, refImage.Tag as string, 18, new Size(0, refImage.Height - 20));
+                ImageHandler.drawWatermark(ref problematicBitmap, problematicBitmap.Tag as string, 18, new Size(0, problematicBitmap.Height - 20));
 
+                var conditionalText = testResult ? @"OK " : @"NOT OK ";
 
-                    ngAction(new[] { currentImage, problematicBitmap }, problematicBitmap);
-                }
+                if (!bools[0])
+                    ImageHandler.drawWatermark(ref problematicBitmap,
+                        conditionalText + @"image from Similarity Test: " + "( P:" + info[0] + " ; M:" + info[1] + "," + info[2] + "," + info[3] + " )");
                 else
-                    okAction();
+                    ImageHandler.drawWatermark(ref problematicBitmap,
+                        conditionalText + @"image from Blurry Test: " + "( " + info[4] + " )");
+
+                commonAction(testResult, new[] { refImage, problematicBitmap }, problematicBitmap);
+                refImage.Dispose();
 
                 currentImage.Dispose();
                 problematicBitmap.Dispose();
@@ -1118,9 +1191,9 @@ namespace Test
             foreach (var i in _deviceSettings.ToList())
             {
                 var dS = new DeviceSettings();
-                dS.PortID = "";
-                dS.Con_Method = EN_CON_METHOD.CON_UART;
-                dS.Con_Status = false;
+                dS.conValue = "";
+                dS.conMethod = EN_CON_METHOD.CON_UART;
+                dS.conStatus = false;
 
                 _deviceSettings[i.Key] = dS;
             }
@@ -1132,21 +1205,24 @@ namespace Test
 
             // Init for Camera
             Saal.CAM_GetCAMList(out cameras);
-            ImageHandler.CamName = cameras[0]; // set camera device
-            ImageHandler.ImgFromParent = Picture; // send picture box control
-            ImageHandler.ResSize.Width = ResWidth;
-            ImageHandler.ResSize.Height = ResHeight;
-            var imageGuide = new Bitmap(ResWidth, ResHeight);
-            imageGuide.Tag = "HDMIPictureFormat";
-            DrawGuides(imageGuide, new Rectangle(0, 0, ResWidth, ResHeight));
-            ImageHandler.gridBitmap = imageGuide;
-            ImageHandler.InitCamera(); // start camera
-
-            foreach (string cam in cameras)
+            if (cameras.Length > 0)
             {
-                cbCamList.Items.Add(cam);
+                ImageHandler.CamName = cameras[0]; // set camera device
+                ImageHandler.ImgFromParent = Picture; // send picture box control
+                ImageHandler.ResSize.Width = ResWidth;
+                ImageHandler.ResSize.Height = ResHeight;
+                var imageGuide = new Bitmap(ResWidth, ResHeight);
+                imageGuide.Tag = "HDMIPictureFormat";
+                DrawGuides(imageGuide, new Rectangle(0, 0, ResWidth, ResHeight));
+                ImageHandler.gridBitmap = imageGuide;
+                ImageHandler.InitCamera(); // start camera
+
+                foreach (string cam in cameras)
+                {
+                    cbCamList.Items.Add(cam);
+                }
+                cbCamList.SelectedIndex = 0;
             }
-            cbCamList.SelectedIndex = 0;
         }
 
         private static void DrawGuides(Bitmap imageCanvas, Rectangle drawBox)
@@ -1189,23 +1265,6 @@ namespace Test
         #endregion
 
         #region Camera - Event Handler
-
-        // Open picture box in new form
-        private void pictureBox_DoubleClick(object sender, EventArgs e)
-        {
-            cameraPopup.BringToFront();
-            cameraPopup.WindowState = FormWindowState.Minimized;
-            cameraPopup.Show();
-            cameraPopup.WindowState = FormWindowState.Normal;
-        }
-
-        // Close picture box
-        private void CameraPopupFormClosing(object sender, FormClosingEventArgs e)
-        {
-            e.Cancel = true;
-            cameraPopup.Hide();
-        }
-
         // On/Off button event for camera
         private void btOnOffCam_Click(object sender, EventArgs e)
         {
@@ -1231,19 +1290,18 @@ namespace Test
         // Camera list item click event
         private void cbCamList_SelectedIndexChanged(object sender, EventArgs e)
         {
-            if (Saal.videoDisplay.IsRunning)
+            ImageHandler.CamName = cbCamList.Text;
+            ImageHandler.ImgFromParent = Picture;
+            ImageHandler.InitCamera();
+
+            btOnOffCam.BackColor = Color.LightBlue;
+            btOnOffCam.Text = "On";
+            if (Picture.Image != null)
             {
-                Saal.videoDisplay.Stop();
+                Picture.Image.Dispose();
+                Picture.Image = null;
             }
-            foreach (FilterInfo device in Saal.videoDevice)
-            {
-                if (device.Name == cbCamList.SelectedText)
-                {
-                    ImageHandler.CamName = device.Name;
-                    ImageHandler.ImgFromParent = Picture;
-                    ImageHandler.InitCamera();
-                }
-            }
+
         }
         #endregion
 
@@ -1385,7 +1443,7 @@ namespace Test
             bool valid_single = false;
             foreach (var i in _deviceSettings)
             {
-                if (i.Value.Con_Status)
+                if (i.Value.conStatus)
                 {
                     if (!valid_single)
                         valid_single = true;
@@ -1419,6 +1477,10 @@ namespace Test
         {
             progressBarStuff = new ProgressBarStuff(ref backgroundWorker);
             progressBarStuff.Show(selection, datagridview, owner);
+
+            var currentImage = new Bitmap(ImageHandler.CurrentFrame);
+            currentImage.Tag = "Time taken: " + DateTime.Now;
+            progressBarStuff.refImage = currentImage;
         }
 
         private void InvokeProgressBarChangedEvent(object sender, ProgressChangedEventArgs e)
@@ -1427,81 +1489,124 @@ namespace Test
             progressBarStuff.camLiveImage = ImageHandler.CurrentFrame;
         }
 
-        private void CollectRowIndexData()
+        private bool CollectRowIndexData()
         {
-            var HdmiFormatDictionary = new Dictionary<string, string>();
-            // TODO: add 1 and 7 in SAAL dictionary
-            HdmiFormatDictionary.Add("1", "HDMI001");
-            HdmiFormatDictionary.Add("7", "HDMI007");
 
-            HdmiFormatDictionary.Add("3", "HDMI003");
-            HdmiFormatDictionary.Add("4", "HDMI004");
-            HdmiFormatDictionary.Add("5", "HDMI005");
-            HdmiFormatDictionary.Add("16", "HDMI016");
-            HdmiFormatDictionary.Add("32", "HDMI032");
-            HdmiFormatDictionary.Add("34", "HDMI034");
-
-            var hdmi_key = _rowIndexData.HDMIFormat.vA;
-            var hdmi_value = _rowIndexData.HDMIFormat.vB;
-            var hdmi_raw = _rowIndexData.HDMIFormat.vC;
-
-            var current_hdmi_raw = toExecute.Cells[hdmi_key].Value.ToString();
-
-            if (current_hdmi_raw.Equals(""))
+            /* 
+             * 1. Set resolution             * 
+             * search for key (1 ~ 34) in the row, then assign the value (HDMI001)
+             */
             {
-                toExecute.Cells[hdmi_key].Value = hdmi_raw; // assign old value
-            }
-            else
-            {
-                hdmi_raw = current_hdmi_raw;
-                var m = Regex.Match(hdmi_raw, @"\d+?");
-                if (m.Success)
-                    hdmi_value = HdmiFormatDictionary[m.Value];
-            }
+                var hdmiFormatDictionary = new Dictionary<string, string>();
+                hdmiFormatDictionary.Add("1", "HDMI001");
+                hdmiFormatDictionary.Add("7", "HDMI007");
+                hdmiFormatDictionary.Add("3", "HDMI003");
+                hdmiFormatDictionary.Add("4", "HDMI004");
+                hdmiFormatDictionary.Add("5", "HDMI005");
+                hdmiFormatDictionary.Add("16", "HDMI016");
+                hdmiFormatDictionary.Add("32", "HDMI032");
+                hdmiFormatDictionary.Add("34", "HDMI034");
 
-            _rowIndexData.HDMIFormat.vA = hdmi_key;
-            _rowIndexData.HDMIFormat.vB = hdmi_value;
-            _rowIndexData.HDMIFormat.vC = hdmi_raw;
+                var hdmiKey = _rowIndexData.HDMIFormat.vA;
+                var hdmiValue = _rowIndexData.HDMIFormat.vB;
+                var hdmiRaw = _rowIndexData.HDMIFormat.vC;
 
-            // add color space
-            var colorSpaces = new List<string>();
-            ;
-            colorSpaces.Add("4:4:4");
-            colorSpaces.Add("4:2:2");
-            colorSpaces.Add("RGB");
+                var current_hdmi_raw = toExecute.Cells[hdmiKey].Value.ToString();
 
-            var color_key = _rowIndexData.colorSpace.vA;
-            var color_value = _rowIndexData.colorSpace.vB;
-            var color_raw = _rowIndexData.colorSpace.vC;
-
-            var current_color_raw = toExecute.Cells[color_key].Value.ToString();
-
-            if (current_color_raw.Equals(""))
-            {
-                toExecute.Cells[color_key].Value = color_raw; // assign old value
-            }
-            else
-            {
-                color_raw = current_color_raw;
-                foreach (var i in colorSpaces)
+                if (current_hdmi_raw.Equals(""))
+                    toExecute.Cells[hdmiKey].Value = hdmiRaw; // assign old value
+                else
                 {
-                    var m = Regex.Match(color_raw, i);
+                    hdmiRaw = current_hdmi_raw;
+                    var m = Regex.Match(hdmiRaw, @"\d+");
                     if (m.Success)
+                        hdmiValue = hdmiFormatDictionary[m.Value];
+                }
+
+                if (hdmiValue.Equals(""))
+                    return false;
+
+                _rowIndexData.HDMIFormat.vA = hdmiKey;
+                _rowIndexData.HDMIFormat.vB = hdmiValue;
+                _rowIndexData.HDMIFormat.vC = hdmiRaw;
+            }
+
+            /* 
+             * 2. Set frequency             
+             * search for ".94", which means 1.001 modifier, otherwise 1.0
+             * in devicecmd, 1.001 = 1, 1 = 0
+             */
+            {
+                var freqKey = _rowIndexData.frequency.vA;
+                var freqValue = _rowIndexData.frequency.vB;
+                var freqRaw = _rowIndexData.frequency.vC;
+
+                var current_freq_raw = toExecute.Cells[freqKey].Value.ToString();
+
+                if (current_freq_raw.Equals(""))
+                    toExecute.Cells[freqKey].Value = freqRaw; // assign old value
+                else
+                {
+                    freqRaw = current_freq_raw;
+                    freqValue = Regex.IsMatch(freqRaw, @".94") ? "1" : "0";
+                }
+
+                if (freqValue.Equals(""))
+                    return false;
+
+                _rowIndexData.frequency.vA = freqKey;
+                _rowIndexData.frequency.vB = freqValue;
+                _rowIndexData.frequency.vC = freqRaw;
+            }
+
+            /* 
+             * 3. Set Color space            
+             */
+            {
+                // add color space
+                var colorSpaces = new List<string>();
+                colorSpaces.Add("4:4:4");
+                colorSpaces.Add("4:2:2");
+                colorSpaces.Add("RGB");
+
+                var color_key = _rowIndexData.colorType.vA;
+                var color_value = _rowIndexData.colorType.vB;
+                var color_raw = _rowIndexData.colorType.vC;
+
+                var current_color_raw = toExecute.Cells[color_key].Value.ToString();
+
+                if (current_color_raw.Equals(""))
+                {
+                    toExecute.Cells[color_key].Value = color_raw; // assign old value
+                }
+                else
+                {
+                    color_raw = current_color_raw;
+                    foreach (var i in colorSpaces)
                     {
-                        color_value = i;
-                        break;
+                        var m = Regex.Match(color_raw, i);
+                        if (m.Success)
+                        {
+                            color_value = i;
+                            break;
+                        }
                     }
                 }
-            }
 
-            _rowIndexData.colorSpace.vA = color_key;
-            _rowIndexData.colorSpace.vB = color_value;
-            _rowIndexData.colorSpace.vC = color_raw;
+                if (color_value.Equals(""))
+                    return false;
+
+                _rowIndexData.colorType.vA = color_key;
+                _rowIndexData.colorType.vB = color_value;
+                _rowIndexData.colorType.vC = color_raw;
+            }
 
             _rowIndexData.operation = new KeyValuePair<int, string>(_rowIndexData.operation.Key,
                 toExecute.Cells[_rowIndexData.operation.Key].Value.ToString());
             _rowIndexData.expected = new KeyValuePair<int, string>(_rowIndexData.expected.Key,
                 toExecute.Cells[_rowIndexData.expected.Key].Value.ToString());
+
+            return true;
         }
 
         private void InvokeAfterExecute()
@@ -1529,18 +1634,6 @@ namespace Test
                 imageviewer.Show();
             }
         }
-
-        private void PanelItem_Click(object sender, EventArgs e)
-        {
-            var chxbx = sender as CheckBox;
-
-            if (chxbx.Text != "V Color Bar Guides")
-                return;
-
-            show_v_color_guideline = chxbx.Checked;
-            chxbx.Parent.Hide();
-        }
-
         #endregion
     }
 

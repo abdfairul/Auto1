@@ -381,24 +381,31 @@ namespace Test
 
             // Init for Camera
             Saal.CAM_GetCAMList(out cameras);
-            Saal.CAM_Init(cameras[0]);
-            Saal.videoDisplay.NewFrame += new NewFrameEventHandler(video_NewFrame);
-
-            foreach (string cam in cameras)
+            if (cameras.Length > 0)
             {
-                cbCamList.Items.Add(cam);
+                Saal.CAM_Init(cameras[0]);
+                Saal.videoDisplay.NewFrame += new NewFrameEventHandler(video_NewFrame);
+
+                foreach (string cam in cameras)
+                {
+                    cbCamList.Items.Add(cam);
+                }
+                cbCamList.SelectedIndex = 0;
             }
-            cbCamList.SelectedIndex = 0;
 
             // Init for Mic
             Saal.MIC_GetMICList(out microphone);
-            Saal.MIC_Init(microphone[0]);
 
-            foreach (string mic in microphone)
+            if (microphone.Length > 0)
             {
-                cbMicList.Items.Add(mic);
+                Saal.MIC_Init(microphone[0]);
+
+                foreach (string mic in microphone)
+                {
+                    cbMicList.Items.Add(mic);
+                }
+                cbMicList.SelectedIndex = 0;
             }
-            cbMicList.SelectedIndex = 0;
         }
 
         private void video_NewFrame(object sender, NewFrameEventArgs eventArgs)
